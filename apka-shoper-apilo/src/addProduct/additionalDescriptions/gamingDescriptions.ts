@@ -1,0 +1,114 @@
+export const gaming_gpu = {
+    'RTX': "Karty graficzne NVIDIA GeForce RTX to nowoczesne rozwiązania stworzone z myślą o graczach i twórcach treści. Dzięki technologii ray tracing oraz wsparciu DLSS zapewniają wysoką jakość obrazu i płynność rozgrywki nawet w najbardziej wymagających grach. To idealny wybór do grania w rozdzielczości Full HD, QHD, a nawet 4K.",
+    'GTX': 'Karty graficzne NVIDIA GeForce GTX to sprawdzone układy oferujące dobrą wydajność w grach i aplikacjach multimedialnych. Świetnie sprawdzają się w grach e-sportowych i tytułach z poprzednich lat w rozdzielczości Full HD. To solidny wybór dla graczy szukających dobrej jakości w przystępnej cenie.',
+    'Radeon': 'Karty graficzne AMD Radeon RX zapewniają wysoką wydajność i świetny stosunek ceny do możliwości. Dzięki wsparciu dla technologii AMD FidelityFX oraz obsłudze DirectX 12, karty z tej serii doskonale radzą sobie z nowoczesnymi grami w rozdzielczości Full HD i QHD. To znakomity wybór dla graczy i entuzjastów AMD.',
+    'Integrated': 'Zintegrowana karta graficzna to rozwiązanie wbudowane w procesor, które umożliwia podstawową obsługę grafiki bez potrzeby posiadania dedykowanej karty. Sprawdza się idealnie w codziennych zadaniach, takich jak przeglądanie internetu, praca biurowa czy odtwarzanie multimediów. Dla mniej wymagających graczy pozwala również uruchomić starsze lub mniej zasobożerne tytuły.',
+
+}
+export const gaming_gpu_CZ = {
+    'RTX': 'Grafické karty NVIDIA GeForce RTX představují moderní řešení navržené pro hráče a tvůrce obsahu. Díky technologii ray tracing a podpoře DLSS nabízejí realistickou grafiku a plynulé hraní i v nejnáročnějších hrách. Jsou ideální volbou pro hraní ve Full HD, QHD a dokonce i ve 4K rozlišení.',
+    'GTX': 'Grafické karty NVIDIA GeForce GTX jsou osvědčené a nabízejí spolehlivý výkon ve hrách i multimédiích. Skvěle se hodí pro esportové tituly a starší hry ve Full HD rozlišení. Výborná volba pro hráče, kteří hledají kvalitní výkon za rozumnou cenu.',
+    'Radeon RX': 'Grafické karty AMD Radeon RX nabízejí vysoký výkon a skvělý poměr cena/výkon. Díky technologiím AMD FidelityFX a podpoře DirectX 12 zvládají moderní hry ve Full HD a QHD rozlišení bez problémů. Skvělá volba pro hráče a fanoušky AMD.',
+    'Integrated': 'Integrovaná grafická karta je součástí procesoru a poskytuje základní grafický výkon bez nutnosti samostatné grafické karty. Skvěle poslouží pro běžné činnosti jako je prohlížení webu, kancelářská práce nebo přehrávání videí. Umožňuje také spuštění starších nebo méně náročných herních titulů.',
+}
+
+export const gaming_gpu_SK = {
+    'RTX': 'Grafické karty NVIDIA GeForce RTX predstavujú moderné riešenie určené pre hráčov a tvorcov obsahu. Vďaka technológii ray tracing a podpore DLSS poskytujú realistickú grafiku a plynulé hranie aj v najnáročnejších hrách. Ideálne na hranie vo Full HD, QHD a dokonca aj v 4K rozlíšení.',
+    'GTX': 'Grafické karty NVIDIA GeForce GTX sú osvedčené riešenia s dobrým výkonom v hrách a multimédiách. Výborne sa hodia na esportové tituly a staršie hry vo Full HD rozlíšení. Skvelá voľba pre hráčov, ktorí hľadajú dobrý výkon za rozumnú cenu.',
+    'Radeon RX': 'Grafické karty AMD Radeon RX poskytujú vysoký výkon a výborný pomer ceny a výkonu. S technológiami AMD FidelityFX a podporou DirectX 12 si bez problémov poradia s modernými hrami vo Full HD a QHD rozlíšení. Výborná voľba pre hráčov a fanúšikov AMD.',
+    'Integrated': 'Integrovaná grafická karta je súčasťou procesora a zabezpečuje základný grafický výkon bez potreby samostatnej grafickej karty. Výborne postačuje na bežné úlohy ako je prehliadanie internetu, kancelárska práca či prehrávanie videí. Zvládne aj staršie alebo menej náročné hry.',
+
+}
+
+export const gaming_cpuTypesDescriptions = {
+    'i3': "Procesory Intel Core i3 w nowoczesnych generacjach oferują zaskakująco dobrą wydajność w grach e-sportowych i mniej wymagających tytułach. To dobry wybór dla graczy szukających taniego zestawu gamingowego do rozgrywki w rozdzielczości Full HD. Świetnie sprawdza się w połączeniu z budżetowymi kartami graficznymi, zapewniając płynną zabawę bez dużych kosztów.",
+    'i5': "Intel Core i5 to bardzo popularny wybór w komputerach gamingowych, łączący wysoką wydajność z rozsądną ceną. Dzięki wyższej liczbie rdzeni i nowoczesnym technologiom świetnie radzi sobie w większości nowych gier. Idealny procesor dla graczy, którzy oczekują płynnej rozgrywki w 1080p lub QHD i chcą mieć zapas mocy także do streamowania czy nagrywania.",
+    'i7': "Procesory Intel Core i7 to doskonała propozycja dla zaawansowanych graczy i twórców treści. Bez problemu obsługują najnowsze gry na wysokich ustawieniach graficznych, a dodatkowe wątki i wysokie taktowanie pozwalają na streamowanie, nagrywanie i multitasking bez kompromisów. Świetny wybór do zestawów gamingowych klasy premium.",
+    'i9': "Intel Core i9 to potężne jednostki stworzone z myślą o entuzjastach i profesjonalnych graczach. Dzięki dużej liczbie rdzeni, wysokiemu taktowaniu i wsparciu zaawansowanych technologii idealnie sprawdzają się w grach 4K, VR oraz w pracy z grafiką i renderowaniem. To wybór dla tych, którzy oczekują maksymalnej wydajności bez kompromisów.",
+    'Ryzen 3': "AMD Ryzen 3 to dobre procesory do budżetowych komputerów gamingowych. Zapewniają płynną rozgrywkę w grach e-sportowych i starszych tytułach przy odpowiednim dobraniu karty graficznej. To idealna opcja dla początkujących graczy i osób szukających taniego zestawu do codziennego grania w 1080p.",
+    'Ryzen 5': "Ryzen 5 to bardzo popularny wybór w komputerach do gier. Oferuje wysoką wydajność w najnowszych tytułach, dobrą wielozadaniowość oraz świetny stosunek ceny do możliwości. Doskonale sprawdza się w rozgrywce Full HD i QHD, a także w streamingu i pracy z grafiką. To uniwersalny procesor do mocnych zestawów gamingowych.",
+    'Ryzen 7': "AMD Ryzen 7 to wysoka wydajność i duża liczba rdzeni – idealna kombinacja dla wymagających graczy. Procesor bez trudu obsługuje gry w wysokich rozdzielczościach, streaming oraz tworzenie treści. Dzięki technologii Precision Boost zapewnia dynamiczne zwiększanie mocy tam, gdzie jest to potrzebne. Świetny wybór dla graczy, którzy oczekują czegoś więcej.",
+    'Ryzen 9': "Ryzen 9 to topowe procesory AMD przeznaczone dla najbardziej wymagających graczy i twórców. Doskonale radzi sobie z grami AAA w 4K, VR, streamowaniem oraz profesjonalną obróbką grafiki i wideo. To idealna jednostka do zestawów gamingowych klasy high-end, gdzie nie ma miejsca na kompromisy.",
+    'Xeon': "Procesory Intel Xeon rzadziej spotykane są w komputerach gamingowych, ale mogą stanowić ciekawe rozwiązanie w konfiguracjach serwerowo-gamingowych lub do zastosowań profesjonalnych z okazjonalnym graniem. Dzięki dużej liczbie rdzeni dobrze radzą sobie w zastosowaniach wymagających mocy obliczeniowej, jednak nie są zoptymalizowane typowo pod gry.",
+}
+
+export const gaming_cpuTypesDescriptions_CZ = {
+    'i3': "Procesory Intel Core i3 v moderních generacích nabízejí překvapivě dobrý výkon ve hrách typu e-sport a méně náročných titulech. Jsou ideální volbou pro hráče, kteří hledají levné herní sestavy pro hraní ve Full HD rozlišení. V kombinaci s levnější grafickou kartou poskytují plynulý herní zážitek bez vysokých nákladů.",
+    'i5': "Intel Core i5 je oblíbená volba pro hráče díky skvělému poměru ceny a výkonu. Vyšší počet jader a moderní technologie umožňují plynulé hraní moderních her, a to i ve vysokém rozlišení. Skvělé řešení pro hráče, kteří chtějí spolehlivý výkon i při streamování nebo multitaskingu.",
+    'i7': "Procesory Intel Core i7 jsou ideální pro náročné hráče a tvůrce obsahu. Snadno si poradí s novými hrami na vysoké detaily a zároveň umožňují streamování, nahrávání videa či práci v grafických programech. Vynikající volba pro výkonné herní sestavy.",
+    'i9': "Intel Core i9 představuje špičku mezi herními procesory. Nabízí extrémní výkon díky vysokému počtu jader a vláken a je určen pro hráče, kteří hrají ve 4K, VR nebo provádějí náročné grafické práce. Ideální pro ty, kteří chtějí maximální výkon bez kompromisů.",
+    'R3': "AMD Ryzen 3 je vhodný pro základní herní sestavy. Zvládá e-sport tituly a starší hry ve Full HD rozlišení. V kombinaci s vhodnou grafickou kartou poskytuje plynulý výkon a představuje skvělý vstup do světa PC gamingu za dostupnou cenu.",
+    'R5': "Ryzen 5 je ideální volba pro hráče, kteří hledají výkonný, ale cenově dostupný procesor. Umožňuje hraní moderních her, streamování i práci s multimédii. Nabízí vynikající poměr cena/výkon a je srdcem mnoha úspěšných herních sestav.",
+    'R7': "AMD Ryzen 7 nabízí vysoký výkon pro náročné hry, streamování i tvorbu obsahu. Díky více jádrům a vláknům zvládne i nejnáročnější herní scénáře a multitasking. Skvělá volba pro hráče, kteří chtějí výkon bez kompromisů.",
+    'R9': "Ryzen 9 je výkonný procesor pro nejnáročnější uživatele. Je určen pro hraní ve 4K, VR, editaci videa i renderování. Pokud hledáte absolutní herní výkon a sílu i pro profesionální aplikace, Ryzen 9 je tou pravou volbou.",
+    'Xeon': "Procesory Intel Xeon se primárně používají v serverech a pracovních stanicích, ale některé modely lze využít i v herních sestavách. Nabízejí vysoký počet jader a stabilní výkon, ale nejsou optimalizovány přímo pro hry.",
+}
+
+export const gaming_cpuTypesDescriptions_SK = {
+    'i3': "Procesory Intel Core i3 v novších generáciách ponúkajú prekvapivo dobrý výkon v e-športových a menej náročných hrách. Sú ideálnou voľbou pre hráčov, ktorí hľadajú cenovo dostupný počítač na hranie vo Full HD rozlíšení. V kombinácii s dostupnou grafickou kartou umožňujú plynulé hranie za rozumnú cenu.",
+    'i5': "Intel Core i5 je skvelá voľba pre hráčov, ktorí chcú spojiť vysoký výkon s priaznivou cenou. Vďaka vyššiemu počtu jadier a moderným technológiám si poradí s väčšinou hier aj streamovaním. Vhodný pre tých, ktorí chcú stabilný herný výkon vo Full HD alebo QHD.",
+    'i7': "Procesory Intel Core i7 sú ideálne pre náročných hráčov a tvorcov obsahu. Poskytujú vysoký výkon pre moderné hry, streamovanie a multitasking. Ide o výbornú voľbu pre herné zostavy, ktoré musia zvládnuť viac než len hranie.",
+    'i9': "Intel Core i9 je procesor pre najnáročnejších. Vďaka veľkému počtu jadier a vysokému taktu zvládne hranie v 4K, VR a profesionálnu tvorbu obsahu. Je určený pre tých, ktorí chcú z herného PC vyťažiť maximum.",
+    'R3': "AMD Ryzen 3 je vhodný pre základné herné zostavy. Poskytuje dostatočný výkon na e-športové tituly a staršie hry pri Full HD rozlíšení. Vhodná voľba pre začiatočníkov a hráčov s obmedzeným rozpočtom.",
+    'R5': "Ryzen 5 je skvelý univerzálny procesor pre hráčov. Ponúka dostatok výkonu na moderné hry, streamovanie a prácu s multimédiami. Vďaka dobrému pomeru cena/výkon patrí medzi najobľúbenejšie riešenia pre herné počítače.",
+    'R7': "AMD Ryzen 7 je výkonný procesor určený pre hráčov a kreatívcov, ktorí chcú zvládnuť náročné herné aj pracovné úlohy. S vysokým počtom jadier a vláken zvládne aj najnáročnejšie tituly a úlohy bez spomalenia.",
+    'R9': "Ryzen 9 je procesor pre najnáročnejších hráčov a profesionálov. Poskytuje extrémny výkon pre 4K hranie, VR a náročné aplikácie. Ak chcete to najlepšie, Ryzen 9 je správna voľba.",
+    'Xeon': "Procesory Intel Xeon sú určené predovšetkým pre servery a pracovné stanice, no niektoré modely možno využiť aj v herných zostavách. Poskytujú vysoký výkon a spoľahlivosť, no nie sú primárne optimalizované pre herné prostredie.",
+}
+
+export const gaming_diskTypesDescriptions = {
+    'HDD': "Tradycyjny dysk HDD to nadal dobre uzupełnienie komputera gamingowego jako dodatkowy magazyn na gry, filmy i pliki. Choć nie nadaje się do uruchamiania systemu czy gier AAA, sprawdza się jako tanie rozwiązanie do przechowywania dużej ilości danych. Rekomendowany jako drugi dysk obok SSD lub NVMe.",
+    'SSD': "Dysk SSD SATA to solidna podstawa każdego zestawu gamingowego. Zapewnia szybkie uruchamianie systemu i gier, a także krótsze czasy ładowania poziomów. To świetny kompromis między wydajnością a ceną, idealny dla graczy budujących komputer w średnim segmencie cenowym.",
+    'SSD (M.2)': "Dysk M.2 SATA to dobre rozwiązanie do budżetowych zestawów gamingowych. Oferuje wyraźnie lepszą wydajność niż tradycyjny HDD, dzięki czemu gry uruchamiają się szybciej, a system działa płynniej. Idealny do komputerów z ograniczonym budżetem, które potrzebują nowoczesnego nośnika w kompaktowej formie.",
+    'NVMe (M.2)': "Dysk M.2 NVMe to najszybszy dostępny nośnik do komputerów gamingowych. Oferuje ekstremalnie szybki odczyt i zapis danych, co znacząco skraca czasy ładowania gier, poziomów i systemu. To idealny wybór do nowoczesnych zestawów z kartą RTX, gdzie każdy ułamek sekundy ma znaczenie. Niezastąpiony dla graczy oczekujących najwyższej responsywności.",
+    'HDD + SSD': "Połączenie SSD i HDD to optymalne rozwiązanie do komputera gamingowego. SSD zapewnia szybkie działanie systemu i gier, a HDD pełni rolę magazynu na pozostałe pliki i gry zajmujące dużo miejsca. To uniwersalna konfiguracja łącząca szybkość z dużą pojemnością.",
+    'HDD + SSD (M.2)': "Połączenie SSD i HDD to optymalne rozwiązanie do komputera gamingowego. SSD zapewnia szybkie działanie systemu i gier, a HDD pełni rolę magazynu na pozostałe pliki i gry zajmujące dużo miejsca. To uniwersalna konfiguracja łącząca szybkość z dużą pojemnością.",
+    'SSD + SSD': "Dysk SSD SATA to solidna podstawa każdego zestawu gamingowego. Zapewnia szybkie uruchamianie systemu i gier, a także krótsze czasy ładowania poziomów. To świetny kompromis między wydajnością a ceną, idealny dla graczy budujących komputer w średnim segmencie cenowym.",
+    'SSD + SSD (M.2)': "Dysk SSD SATA to solidna podstawa każdego zestawu gamingowego. Zapewnia szybkie uruchamianie systemu i gier, a także krótsze czasy ładowania poziomów. To świetny kompromis między wydajnością a ceną, idealny dla graczy budujących komputer w średnim segmencie cenowym.",
+    'brak dysku': ''
+};
+export const gaming_diskTypesDescriptions_CZ = {
+    'HDD': "Tradiční pevný disk HDD je stále dobrým doplňkem herního počítače jako další úložiště pro hry, filmy a soubory. Není vhodný pro spouštění systému nebo AAA her, ale dobře poslouží jako levné řešení pro ukládání velkého množství dat. Doporučuje se jako druhý disk vedle SSD nebo NVMe.",
+    'SSD': "SSD disk SATA je solidním základem každé herní sestavy. Zajišťuje rychlé spouštění systému i her a kratší načítací časy. Skvělý kompromis mezi výkonem a cenou, ideální pro hráče stavějící počítač ve střední cenové kategorii.",
+    'SSD (M.2)': "M.2 SATA disk je dobrým řešením pro rozpočtové herní sestavy. Nabízí výrazně vyšší výkon než tradiční HDD, což umožňuje rychlejší spouštění her a plynulejší chod systému. Ideální pro počítače s omezeným rozpočtem, které potřebují moderní úložiště v kompaktní formě.",
+    'NVMe (M.2)': "Disk M.2 NVMe je nejrychlejší dostupné úložiště pro herní počítače. Nabízí extrémně rychlé čtení a zápis dat, což výrazně zkracuje načítací časy her, úrovní i systému. Ideální volba pro moderní sestavy s grafikou RTX, kde záleží na každé milisekundě. Nezbytný pro hráče požadující maximální odezvu.",
+    'HDD + SSD': "Kombinace SSD a HDD je optimálním řešením pro herní počítač. SSD zajišťuje rychlý chod systému a her, zatímco HDD slouží jako úložiště pro ostatní soubory a hry, které zabírají více místa. Univerzální konfigurace kombinující rychlost a vysokou kapacitu.",
+    'HDD + SSD (M.2)': "Kombinace SSD a HDD je optimálním řešením pro herní počítač. SSD zajišťuje rychlý chod systému a her, zatímco HDD slouží jako úložiště pro ostatní soubory a hry, které zabírají více místa. Univerzální konfigurace kombinující rychlost a vysokou kapacitu.",
+    'SSD + SSD': "SSD disk SATA je solidním základem každé herní sestavy. Zajišťuje rychlé spouštění systému i her a kratší načítací časy. Skvělý kompromis mezi výkonem a cenou, ideální pro hráče stavějící počítač ve střední cenové kategorii.",
+    'SSD + SSD (M.2)': "SSD disk SATA je solidním základem každé herní sestavy. Zajišťuje rychlé spouštění systému i her a kratší načítací časy. Skvělý kompromis mezi výkonem a cenou, ideální pro hráče stavějící počítač ve střední cenové kategorii.",
+    'brak dysku': ''
+};
+export const gaming_diskTypesDescriptions_SK = {
+    'HDD': "Tradičný pevný disk HDD je stále dobrým doplnkom herného počítača ako ďalšie úložisko pre hry, filmy a súbory. Nie je vhodný na spúšťanie systému alebo AAA hier, ale je výhodným riešením na ukladanie veľkého množstva dát. Odporúča sa ako druhý disk popri SSD alebo NVMe.",
+    'SSD': "SSD disk SATA je spoľahlivým základom každej hernej zostavy. Zabezpečuje rýchle spúšťanie systému aj hier a kratšie časy načítavania úrovní. Skvelý kompromis medzi výkonom a cenou, ideálny pre hráčov, ktorí stavajú počítač v strednej cenovej triede.",
+    'SSD (M.2)': "M.2 SATA disk je vhodným riešením pre rozpočtové herné zostavy. Ponúka výrazne vyšší výkon než tradičný HDD, vďaka čomu sa hry spúšťajú rýchlejšie a systém pracuje plynulejšie. Ideálny pre počítače s obmedzeným rozpočtom, ktoré potrebujú moderné úložisko v kompaktnej forme.",
+    'NVMe (M.2)': "Disk M.2 NVMe je najrýchlejšie dostupné úložisko pre herné počítače. Ponúka extrémne rýchle čítanie a zápis dát, čo výrazne skracuje časy načítavania hier, úrovní a systému. Ideálna voľba pre moderné zostavy s grafikou RTX, kde rozhoduje každá sekunda. Nenahraditeľný pre hráčov, ktorí očakávajú maximálnu odozvu.",
+    'HDD + SSD': "Kombinácia SSD a HDD je optimálnym riešením pre herný počítač. SSD zabezpečuje rýchly chod systému a hier, zatiaľ čo HDD slúži ako úložisko pre ďalšie súbory a objemné hry. Univerzálna konfigurácia, ktorá spája rýchlosť a vysokú kapacitu.",
+    'HDD + SSD (M.2)': "Kombinácia SSD a HDD je optimálnym riešením pre herný počítač. SSD zabezpečuje rýchly chod systému a hier, zatiaľ čo HDD slúži ako úložisko pre ďalšie súbory a objemné hry. Univerzálna konfigurácia, ktorá spája rýchlosť a vysokú kapacitu.",
+    'SSD + SSD': "SSD disk SATA je spoľahlivým základom každej hernej zostavy. Zabezpečuje rýchle spúšťanie systému aj hier a kratšie časy načítavania úrovní. Skvelý kompromis medzi výkonom a cenou, ideálny pre hráčov, ktorí stavajú počítač v strednej cenovej triede.",
+    'SSD + SSD (M.2)': "SSD disk SATA je spoľahlivým základom každej hernej zostavy. Zabezpečuje rýchle spúšťanie systému aj hier a kratšie časy načítavania úrovní. Skvelý kompromis medzi výkonom a cenou, ideálny pre hráčov, ktorí stavajú počítač v strednej cenovej triede.",
+    'brak dysku': ''
+};
+
+
+
+export const gaming_ramTypesDescriptions = {
+    'DDR2': "Pamięć RAM DDR2 to starszy standard, który można jeszcze spotkać w bardzo budżetowych lub retro zestawach komputerowych. Choć nie zapewnia wystarczającej wydajności do nowoczesnych gier, może być wykorzystana w starszych konfiguracjach do podstawowych zastosowań. Niewielkie taktowania i ograniczona przepustowość czynią ją niewystarczającą dla współczesnych graczy.",
+    'DDR3': "DDR3 to wciąż używana pamięć RAM w starszych komputerach gamingowych. Oferuje przyzwoitą wydajność w grach e-sportowych i mniej wymagających tytułach. To dobry wybór dla graczy modernizujących starszy sprzęt, którzy szukają kompromisu między ceną a płynnością działania. Choć ustępuje nowszym generacjom, nadal pozwala na komfortową rozgrywkę w wielu grach.",
+    'DDR4': "Pamięć RAM DDR4 to obecnie najpopularniejszy standard w komputerach gamingowych. Charakteryzuje się wysokim taktowaniem i dobrą przepustowością, co przekłada się na szybkie wczytywanie gier i responsywną pracę systemu. Idealna do zestawów z kartami graficznymi średniego i wyższego segmentu. DDR4 zapewnia niezawodną wydajność w grach AAA i rozgrywce wielozadaniowej.",
+    'DDR5': "DDR5 to najnowsza generacja pamięci RAM, stworzona dla entuzjastów i graczy oczekujących maksymalnej wydajności. Dzięki wyższym częstotliwościom i znacznie większej przepustowości zapewnia płynność działania nawet w najbardziej wymagających grach i aplikacjach. Doskonale sprawdza się w nowoczesnych zestawach gamingowych z najnowszymi procesorami i kartami graficznymi. To wybór dla graczy, którzy nie uznają kompromisów.",
+};
+
+export const gaming_ramTypesDescriptions_CZ = {
+    'DDR2': "Paměť DDR2 je starší standard, který lze nalézt ve velmi levných nebo retro sestavách. Neposkytuje dostatečný výkon pro moderní hry, ale může sloužit pro základní použití ve starších počítačích. Díky nízké frekvenci a omezené propustnosti není vhodná pro herní nasazení.",
+    'DDR3': "DDR3 je stále využívaná paměť ve starších herních sestavách. Nabízí solidní výkon v nenáročných titulech a hrách e-sportových. Je vhodnou volbou pro hráče, kteří modernizují starší počítač a hledají rovnováhu mezi cenou a výkonem. I když zaostává za novějšími generacemi, umožňuje plynulé hraní mnoha her.",
+    'DDR4': "Paměť DDR4 je v současnosti nejrozšířenější standard v herních počítačích. Vysoké frekvence a dobrá propustnost zajišťují rychlé načítání her a svižnou práci systému. Je ideální pro sestavy se středními a výkonnými grafickými kartami. DDR4 poskytuje spolehlivý výkon v náročných hrách i multitaskingu.",
+    'DDR5': "DDR5 je nejnovější generace paměti RAM určená pro náročné uživatele a hráče. Nabízí vyšší frekvence, větší propustnost a lepší energetickou efektivitu než předchozí generace. Skvěle se hodí do nejnovějších herních sestav s moderními procesory a grafickými kartami. Ideální pro ty, kteří požadují maximální výkon bez kompromisů.",
+};
+
+export const gaming_ramTypesDescriptions_SK = {
+    'DDR2': "Pamäť DDR2 je starší štandard, ktorý sa ešte vyskytuje v veľmi lacných alebo retro zostavách. Neponúka dostatočný výkon pre moderné hry, ale môže poslúžiť v starších počítačoch na základné úlohy. Kvôli nízkej frekvencii a obmedzenej priepustnosti nie je vhodná pre hranie hier.",
+    'DDR3': "DDR3 je stále používaná pamäť v starších herných zostavách. Poskytuje solídny výkon v menej náročných tituloch a e-športových hrách. Je vhodnou voľbou pre hráčov, ktorí modernizujú starší počítač a hľadajú rovnováhu medzi cenou a výkonom. Napriek tomu, že zaostáva za novšími generáciami, umožňuje plynulé hranie mnohých hier.",
+    'DDR4': "Pamäť DDR4 je momentálne najrozšírenejší štandard v herných počítačoch. Vysoké taktovanie a dobrá priepustnosť zabezpečujú rýchle načítanie hier a svižný chod systému. Ideálna pre zostavy so stredne výkonnými a výkonnými grafickými kartami. DDR4 prináša spoľahlivý výkon v náročných hrách aj pri multitaskingu.",
+    'DDR5': "DDR5 je najnovšia generácia pamäte RAM určená pre náročných používateľov a hráčov. Vďaka vyšším frekvenciám a väčšej priepustnosti poskytuje maximálny výkon aj v najnáročnejších hrách a aplikáciách. Skvele sa hodí do moderných herných zostáv s najnovšími procesormi a grafickými kartami. Ideálna voľba pre tých, ktorí chcú to najlepšie.",
+};

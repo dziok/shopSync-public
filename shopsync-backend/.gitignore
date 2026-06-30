@@ -1,0 +1,13 @@
+node_modules
+dist
+apilo-settings.json
+related-product.json
+related-products.json
+shoper-delivery-settings.json
+.DS_Store
+.env
+.env.*
+!.env.example
+.env.local
+dev.env.local
+production.env.local

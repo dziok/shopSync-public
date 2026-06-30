@@ -1,0 +1,35 @@
+.addProductMainContainer {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+form {
+    width: 25vw;
+}
+
+.preview {
+    width: 68vw;
+    background-color: white;
+    margin: 15px;
+    border-radius: 8px;
+}
+
+.rdw-wrapper-257 {
+    font-family: unset !important;
+    font-weight: unset !important;
+    font-style: unset !important;
+}
+
+.css-164rb7w-MuiInputBase-root-MuiOutlinedInput-root-MuiSelect-root {
+    max-width: 25vw;
+}
+
+.ParamatersBox {
+    border-radius: 5px;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 2px 6px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}

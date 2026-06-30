@@ -1,0 +1,22 @@
+# Dependencies and build output
+**/node_modules
+**/dist
+**/coverage
+**/.DS_Store
+
+shopsync-backend/dev.env.local
+shopsync-backend/.env.local
+shopsync-backend/production.env.local
+apka-shoper-apilo/.env.local
+
+# Local/private runtime config
+**/.env
+**/.env.*
+!**/.env.example
+**/dev.env.local
+**/production.env.local
+
+shopsync-backend/apilo-settings.json
+shopsync-backend/related-product.json
+shopsync-backend/related-products.json
+shopsync-backend/shoper-delivery-settings.json

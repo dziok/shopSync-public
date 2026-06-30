@@ -1,0 +1,22 @@
+export const getConfig = () => ({
+  shoperUsername: process.env.SHOPER_USERNAME,
+  shoperpassword: process.env.SHOPER_PASSWORD,
+  appUsername: process.env.APP_USERNAME,
+  appPassword: process.env.APP_PASSWORD,
+  apiloAccessToken: process.env.APILO_ACCESS_TOKEN,
+  allegroAppName: process.env.ALLEGRO_APP_NAME,
+  allegroAppVersion: process.env.ALLEGRO_APP_VERSION,
+  allegroAppUrl: process.env.ALLEGRO_APP_URL,
+  allegroSandboxClientId: process.env.ALLEGRO_SANDBOX_CLIENT_ID,
+  allegroSandboxClientSecret: process.env.ALLEGRO_SANDBOX_CLIENT_SECRET,
+  allegroProdClientId: process.env.ALLEGRO_PROD_CLIENT_ID,
+  allegroProdClientSecret: process.env.ALLEGRO_PROD_CLIENT_SECRET,
+  shoperRestBaseUrl: process.env.SHOPER_REST_BASE_URL,
+  shoperStorefrontBaseUrl: process.env.SHOPER_STOREFRONT_BASE_URL,
+  apiloBaseUrl: process.env.APILO_BASE_URL,
+  jwtSecret: process.env.JWT_SECRET,
+  host: process.env.HOST ?? "127.0.0.1",
+  port: process.env.PORT ? +process.env.PORT : 3000,
+});
+
+export type Config = ReturnType<typeof getConfig>;
