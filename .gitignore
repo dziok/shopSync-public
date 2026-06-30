@@ -5,8 +5,10 @@
 **/.DS_Store
 
 shopsync-backend/dev.env.local
+shopsync-backend/dev.env
 shopsync-backend/.env.local
 shopsync-backend/production.env.local
+shopsync-backend/production.env
 apka-shoper-apilo/.env.local
 
 # Local/private runtime config
