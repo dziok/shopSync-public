@@ -43,6 +43,6 @@ Use the example files as templates:
 
 Requests sent to Allegro identify the application as:
 
-`shopSync/<version> (+https://github.com/dziok/shopSync)`
+`shopSync/<version> (+https://github.com/dziok/shopSync-public)`
 
 The URL in the header should point to documentation describing the purpose of the application and the owner-controlled nature of the integration.

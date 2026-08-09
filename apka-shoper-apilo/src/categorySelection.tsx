@@ -20,6 +20,7 @@ import { getOrdersStatus5 } from './backendQueries/getOrders';
 import ApiloOrdersPanel from './apiloOrder';
 import ShoperDeliveryTimePanel from './shoperDeliveryTimePanel';
 import RelatedProductsPanel from './relatedProductsPanel';
+import ApiloTokenStatus from './apiloTokenStatus';
 
 type AddProductProps = {
     authToken: string
@@ -558,6 +559,8 @@ function CategorySelection(props: AddProductProps) {
                     borderRadius: "8px",
                 }}
             >
+                <ApiloTokenStatus authToken={props.authToken} />
+
                 {accessTokenAllegro ? (
                     <button style={buttonStyle("#3c743c")} disabled>
                         Dostęp przyznany
@@ -599,7 +602,7 @@ function CategorySelection(props: AddProductProps) {
 
 
             {showAddGamingPC && <AddGamingPC authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} />}
-            {showAddMonitor && <AddMonitor authToken={props.authToken} />}
+            {showAddMonitor && <AddMonitor authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} />}
             {showAddCustomProduct && <AddCustomProduct authToken={props.authToken} />}
             {showAddDamagedLaptop && <AddDamagedLaptop authToken={props.authToken} />}
             {showAddLaptop && <AddLaptop authToken={props.authToken} />}

@@ -8,6 +8,64 @@
   width: 100%;
 }
 
+.apilo-token-status {
+  --status-color: #8b949e;
+  align-items: center;
+  background: #363434;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 8px;
+  margin: 10px;
+  min-height: 39px;
+  padding: 0 5px 0 12px;
+}
+
+.apilo-token-status--valid {
+  --status-color: #53c878;
+}
+
+.apilo-token-status--inactive {
+  --status-color: #e16666;
+}
+
+.apilo-token-status__dot {
+  background: var(--status-color);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 20%, transparent);
+  height: 8px;
+  width: 8px;
+}
+
+.apilo-token-status > strong {
+  color: #f7f7f7;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.apilo-token-status__refresh {
+  background: #282828;
+  border: 1px solid #4c4c4c;
+  color: #f0f0f0;
+  font-size: 0.78rem;
+  margin: 4px 0 4px 3px;
+  padding: 5px 8px;
+}
+
+.apilo-token-status__refresh:hover {
+  border-color: var(--status-color);
+}
+
+.apilo-token-status--loading .apilo-token-status__dot {
+  animation: apilo-token-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes apilo-token-pulse {
+  to {
+    opacity: 0.35;
+  }
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

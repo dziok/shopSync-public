@@ -36,6 +36,25 @@ Wymagane są też adresy bazowe Twojej infrastruktury:
 - `SHOPER_STOREFRONT_BASE_URL`
 - `APILO_BASE_URL`
 
+## Automatyczne odnawianie tokenu Apilo
+
+Autoryzacja Apilo wymaga następujących zmiennych:
+
+- `APILO_AUTH_URL=https://your-account.apilo.com/rest/auth/token/` (opcjonalnie)
+- `APILO_CLIENT_ID`
+- `APILO_CLIENT_SECRET`
+- `APILO_AUTHORIZATION_CODE`
+
+Kod autoryzacyjny jest używany tylko przy pierwszym uruchomieniu. Otrzymana
+para access/refresh tokenów jest zapisywana domyślnie w prywatnym pliku
+`shopsync-backend/.data/apilo-tokens.json`. Plik jest ignorowany przez Git.
+Ścieżkę można zmienić przez `APILO_TOKEN_FILE`.
+
+Backend sprawdza ważność tokenu podczas logowania oraz cyklicznie co 6 godzin.
+Po poprawnej inicjalizacji `APILO_ACCESS_TOKEN` nie jest potrzebny.
+Jeśli `APILO_AUTH_URL` nie jest ustawiony, backend automatycznie wylicza
+endpoint `/rest/auth/token/` z hosta `APILO_BASE_URL`.
+
 ## Uruchomienie
 
 ```bash
@@ -47,4 +66,4 @@ npm run start:dev
 
 Requesty do Allegro identyfikują aplikację jako:
 
-`shopSync/<version> (+https://github.com/dziok/shopSync)`
+`shopSync/<version> (+https://github.com/dziok/shopSync-public)`

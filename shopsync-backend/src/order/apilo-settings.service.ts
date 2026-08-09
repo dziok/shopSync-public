@@ -60,7 +60,7 @@ export interface MonthlyComputerCount {
     manual: number;
 }
 
-export type MonthlyComputerTargetScheduleMode = 'always' | 'off' | 'alternate_a' | 'alternate_b';
+export type MonthlyComputerTargetScheduleMode = 'always' | 'off' | 'alternate_a' | 'alternate_b' | 'alternate_c';
 
 export interface MonthlyComputerTargetSchedule {
     mode: MonthlyComputerTargetScheduleMode;
@@ -69,6 +69,7 @@ export interface MonthlyComputerTargetSchedule {
 export interface MonthlyComputerAssignment {
     timezone?: string;
     alternateAnchorDate?: string;
+    mondayAllActive?: boolean;
     targetSchedules?: Record<number, MonthlyComputerTargetSchedule>;
     weekdayTargets: Partial<Record<RotationDayKey, number[]>>;
     monthlyCounts: Record<string, Record<number, MonthlyComputerCount>>;
@@ -198,6 +199,7 @@ export class ApiloSettingsService {
         return {
             timezone: 'Europe/Warsaw',
             alternateAnchorDate: new Date().toISOString().slice(0, 10),
+            mondayAllActive: false,
             targetSchedules,
             weekdayTargets: weekdays,
             monthlyCounts: {},
@@ -222,6 +224,8 @@ export class ApiloSettingsService {
                     ? 'alternate_a'
                     : raw?.mode === 'alternate_b'
                         ? 'alternate_b'
+                        : raw?.mode === 'alternate_c'
+                            ? 'alternate_c'
                         : 'always';
         return { mode };
     }
@@ -312,6 +316,9 @@ export class ApiloSettingsService {
                 : this.isValidDate(fallbackAssignment.alternateAnchorDate)
                     ? String(fallbackAssignment.alternateAnchorDate)
                     : new Date().toISOString().slice(0, 10),
+            mondayAllActive: typeof raw?.mondayAllActive === 'boolean'
+                ? raw.mondayAllActive
+                : !!fallbackAssignment.mondayAllActive,
             targetSchedules,
             weekdayTargets,
             monthlyCounts,

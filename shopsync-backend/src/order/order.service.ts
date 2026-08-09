@@ -264,12 +264,20 @@ export class ApiloOrderService {
         if (assignment?.targetSchedules) {
             if (todayKey === 'saturday' || todayKey === 'sunday') return [];
             const businessDayIndex = Math.max(0, this.diffBusinessDays(todayDate, anchorDate));
+            const usesThreeDayCycle = baseTargets.some((targetId) => {
+                const schedule = assignment.targetSchedules?.[targetId] ?? (assignment.targetSchedules as any)?.[String(targetId)];
+                return schedule?.mode === 'alternate_c';
+            });
+            const cycleLength = usesThreeDayCycle ? 3 : 2;
+
             return baseTargets.filter((targetId) => {
                 const schedule = assignment.targetSchedules?.[targetId] ?? (assignment.targetSchedules as any)?.[String(targetId)];
                 const mode = schedule?.mode ?? 'always';
                 if (mode === 'off') return false;
-                if (mode === 'alternate_a') return businessDayIndex % 2 === 0;
-                if (mode === 'alternate_b') return businessDayIndex % 2 === 1;
+                if (assignment.mondayAllActive && todayKey === 'monday') return true;
+                if (mode === 'alternate_a') return businessDayIndex % cycleLength === 0;
+                if (mode === 'alternate_b') return businessDayIndex % cycleLength === 1;
+                if (mode === 'alternate_c') return businessDayIndex % cycleLength === 2;
                 return true;
             });
         }

@@ -1,36 +1,49 @@
-import { HttpService } from '@nestjs/axios';
-import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
-import { JwtPayload, LoginShoperDto } from './auth.dto';
-import { ConfigService } from '@nestjs/config';
-import { Config } from '../config/config';
-import { JwtService } from '@nestjs/jwt';
-import axios from 'axios';
-import * as qs from 'qs';
-import { buildAllegroUserAgent, withAllegroUserAgent } from '../allegro/allegro-user-agent';
-import { allegroSandboxHttpsAgent } from '../allegro/allegro-sandbox-https';
-import { getShoperRestBaseUrl } from '../config/service-endpoints';
-const CODE_URL = 'https://allegro.pl.allegrosandbox.pl/auth/oauth/device';
-const TOKEN_URL = 'https://allegro.pl.allegrosandbox.pl/auth/oauth/token';
+import { HttpService } from "@nestjs/axios";
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { JwtPayload, LoginShoperDto } from "./auth.dto";
+import { ConfigService } from "@nestjs/config";
+import { Config } from "../config/config";
+import { JwtService } from "@nestjs/jwt";
+import axios from "axios";
+import * as qs from "qs";
+import {
+  buildAllegroUserAgent,
+  withAllegroUserAgent,
+} from "../allegro/allegro-user-agent";
+import { allegroSandboxHttpsAgent } from "../allegro/allegro-sandbox-https";
+import { getShoperRestBaseUrl } from "../config/service-endpoints";
+import { ApiloTokenService } from "./apilo-token.service";
+const CODE_URL = "https://allegro.pl.allegrosandbox.pl/auth/oauth/device";
+const TOKEN_URL = "https://allegro.pl.allegrosandbox.pl/auth/oauth/token";
 
-const CODE_URL_prod = 'https://allegro.pl/auth/oauth/device';
-const TOKEN_URL_prod = 'https://allegro.pl/auth/oauth/token';
+const CODE_URL_prod = "https://allegro.pl/auth/oauth/device";
+const TOKEN_URL_prod = "https://allegro.pl/auth/oauth/token";
 
 @Injectable()
 export class AuthService {
-  constructor(private httpService: HttpService, private config: ConfigService<Config, true>, private jwtService: JwtService) { }
+  constructor(
+    private httpService: HttpService,
+    private config: ConfigService<Config, true>,
+    private jwtService: JwtService,
+    private apiloTokenService: ApiloTokenService,
+  ) {}
 
   private getAllegroUserAgent() {
     return buildAllegroUserAgent({
-      appName: this.config.get('allegroAppName', { infer: true }),
-      appVersion: this.config.get('allegroAppVersion', { infer: true }),
-      appUrl: this.config.get('allegroAppUrl', { infer: true }),
+      appName: this.config.get("allegroAppName", { infer: true }),
+      appVersion: this.config.get("allegroAppVersion", { infer: true }),
+      appUrl: this.config.get("allegroAppUrl", { infer: true }),
     });
   }
 
   private getRequiredConfigValue(key: keyof Config, label: string) {
     const value = this.config.get(key, { infer: true });
 
-    if (typeof value !== 'string' || !value.trim()) {
+    if (typeof value !== "string" || !value.trim()) {
       throw new InternalServerErrorException(`Missing ${label} configuration`);
     }
 
@@ -42,11 +55,17 @@ export class AuthService {
   }
 
   public async authorizeShoper() {
-    const shoperPassword = this.getRequiredConfigValue('shoperpassword', 'SHOPER_PASSWORD');
-    const shoperUsername = this.getRequiredConfigValue('shoperUsername', 'SHOPER_USERNAME');
+    const shoperPassword = this.getRequiredConfigValue(
+      "shoperpassword",
+      "SHOPER_PASSWORD",
+    );
+    const shoperUsername = this.getRequiredConfigValue(
+      "shoperUsername",
+      "SHOPER_USERNAME",
+    );
 
     const response = await this.httpService.axiosRef.post(
-      this.getShoperRestUrl('/auth'),
+      this.getShoperRestUrl("/auth"),
       {},
       {
         auth: {
@@ -54,44 +73,61 @@ export class AuthService {
           password: shoperPassword,
         },
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
-    return response.data['access_token']
+    return response.data["access_token"];
   }
 
   public async authorizeApilo() {
-    return this.getRequiredConfigValue('apiloAccessToken', 'APILO_ACCESS_TOKEN');
+    return this.apiloTokenService.getAccessToken();
   }
 
   async loginShoperAndApilo(dto: LoginShoperDto) {
-    const appPassword = this.getRequiredConfigValue('appPassword', 'APP_PASSWORD');
-    const appUsername = this.getRequiredConfigValue('appUsername', 'APP_USERNAME');
+    const appPassword = this.getRequiredConfigValue(
+      "appPassword",
+      "APP_PASSWORD",
+    );
+    const appUsername = this.getRequiredConfigValue(
+      "appUsername",
+      "APP_USERNAME",
+    );
 
     if (dto.login != appUsername) {
-      throw new UnauthorizedException("invalid login")
+      throw new UnauthorizedException("invalid login");
     }
     if (dto.password != appPassword) {
-      throw new UnauthorizedException("invalid password")
+      throw new UnauthorizedException("invalid password");
     }
 
-    const [shoperToken, apiloToken] = await Promise.all([this.authorizeShoper(), this.authorizeApilo()])
+    const [shoperToken, apiloToken] = await Promise.all([
+      this.authorizeShoper(),
+      this.authorizeApilo(),
+    ]);
 
     const jwtPayload: JwtPayload = {
       shoperToken: shoperToken,
-      apiloToken: apiloToken
-    }
+      apiloToken: apiloToken,
+    };
 
     return {
-      access_token: this.jwtService.sign(jwtPayload)
+      access_token: this.jwtService.sign(jwtPayload),
     };
   }
 
   private getBasicAuthHeader() {
-    const clientId = this.getRequiredConfigValue('allegroSandboxClientId', 'ALLEGRO_SANDBOX_CLIENT_ID');
-    const clientSecret = this.getRequiredConfigValue('allegroSandboxClientSecret', 'ALLEGRO_SANDBOX_CLIENT_SECRET');
-    const base64 = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const clientId = this.getRequiredConfigValue(
+      "allegroSandboxClientId",
+      "ALLEGRO_SANDBOX_CLIENT_ID",
+    );
+    const clientSecret = this.getRequiredConfigValue(
+      "allegroSandboxClientSecret",
+      "ALLEGRO_SANDBOX_CLIENT_SECRET",
+    );
+    const base64 = Buffer.from(`${clientId}:${clientSecret}`).toString(
+      "base64",
+    );
     return `Basic ${base64}`;
   }
 
@@ -99,12 +135,15 @@ export class AuthService {
     const headers = withAllegroUserAgent(
       {
         Authorization: this.getBasicAuthHeader(),
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       this.getAllegroUserAgent(),
     );
     const data = qs.stringify({
-      client_id: this.getRequiredConfigValue('allegroSandboxClientId', 'ALLEGRO_SANDBOX_CLIENT_ID'),
+      client_id: this.getRequiredConfigValue(
+        "allegroSandboxClientId",
+        "ALLEGRO_SANDBOX_CLIENT_ID",
+      ),
     });
 
     const response = await axios.post(CODE_URL, data, {
@@ -118,13 +157,13 @@ export class AuthService {
     const headers = withAllegroUserAgent(
       {
         Authorization: this.getBasicAuthHeader(),
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       this.getAllegroUserAgent(),
     );
 
     const data = qs.stringify({
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
       device_code: deviceCode,
     });
 
@@ -136,9 +175,17 @@ export class AuthService {
   }
 
   private getBasicAuthHeaderProd() {
-    const clientId = this.getRequiredConfigValue('allegroProdClientId', 'ALLEGRO_PROD_CLIENT_ID');
-    const clientSecret = this.getRequiredConfigValue('allegroProdClientSecret', 'ALLEGRO_PROD_CLIENT_SECRET');
-    const base64 = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const clientId = this.getRequiredConfigValue(
+      "allegroProdClientId",
+      "ALLEGRO_PROD_CLIENT_ID",
+    );
+    const clientSecret = this.getRequiredConfigValue(
+      "allegroProdClientSecret",
+      "ALLEGRO_PROD_CLIENT_SECRET",
+    );
+    const base64 = Buffer.from(`${clientId}:${clientSecret}`).toString(
+      "base64",
+    );
     return `Basic ${base64}`;
   }
 
@@ -146,12 +193,15 @@ export class AuthService {
     const headers = withAllegroUserAgent(
       {
         Authorization: this.getBasicAuthHeaderProd(),
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       this.getAllegroUserAgent(),
     );
     const data = qs.stringify({
-      client_id: this.getRequiredConfigValue('allegroProdClientId', 'ALLEGRO_PROD_CLIENT_ID'),
+      client_id: this.getRequiredConfigValue(
+        "allegroProdClientId",
+        "ALLEGRO_PROD_CLIENT_ID",
+      ),
     });
 
     const response = await axios.post(CODE_URL_prod, data, { headers });
@@ -162,13 +212,13 @@ export class AuthService {
     const headers = withAllegroUserAgent(
       {
         Authorization: this.getBasicAuthHeaderProd(),
-        'Content-Type': 'application/x-www-form-urlencoded',
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       this.getAllegroUserAgent(),
     );
 
     const data = qs.stringify({
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
       device_code: deviceCodeProd,
     });
 

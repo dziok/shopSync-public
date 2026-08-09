@@ -35,6 +35,7 @@ import { ApiloDescription, PcApiloAioSpecyfication, PcApiloSpecyfication, pcTemp
 import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
 import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { buildWirelessCommunicationSection } from "./templatesAllegro/wirelessCommunicationSection";
 
 type AddProductProps = {
     authToken: string
@@ -831,6 +832,7 @@ function AddPC(props: AddProductProps) {
 
                     }]
                 },
+                buildWirelessCommunicationSection(formData["Komunikacja"]),
                 !allegroSystemImageUrl
                     ? null
                     : {

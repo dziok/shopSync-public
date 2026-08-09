@@ -1,7 +1,7 @@
 const packageJson = require("../../package.json") as { version?: string };
 
 const DEFAULT_ALLEGRO_APP_NAME = "shopSync";
-const DEFAULT_ALLEGRO_APP_URL = "https://github.com/dziok/shopSync";
+const DEFAULT_ALLEGRO_APP_URL = "https://github.com/dziok/shopSync-public";
 const DEFAULT_ALLEGRO_APP_VERSION = packageJson.version ?? "0.0.1";
 
 type AllegroUserAgentOptions = {

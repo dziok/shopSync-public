@@ -3,7 +3,7 @@ import { useForm, SubmitHandler, Controller } from "react-hook-form"
 import { useEffect, useMemo, useState } from "react";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Autocomplete, Box, Button, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, TextField, ThemeProvider, Typography } from "@mui/material";
+import { Autocomplete, Box, Button, Checkbox, CircularProgress, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Stack, TextField, ThemeProvider, Typography } from "@mui/material";
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import { monitorApiloTemplate1, monitorApiloTemplate2, monitorTemplate } from "./templates/monitorTemplate";
@@ -13,7 +13,7 @@ import { monitorCaseVC, monitorCaseVC_CZ, monitorCaseVC_SK, monitorVC, monitorVC
 import { monitorTemplateCZ } from "./templatesCZ/monitorTemplateCZ";
 import { monitorTemplateSK } from "./templatesSK/monitorTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
-import { Attribute, ProductSafetyCertificateResource, ProductSafetyProducerResource, ProducersResource } from "../types";
+import { Attribute, FormData as AllegroFormData, ProductParameter, ProductSafetyCertificateResource, ProductSafetyProducerResource, ProducersResource } from "../types";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import { handleGetProducers } from "../backendQueries/getProducers";
@@ -22,10 +22,19 @@ import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { AddImageShoper } from "../backendQueries/addImageShoper";
 import RelatedProductsSelect from "../relatedProductsSelect";
 import React from "react";
+import AllegroMonitorParameters from "./allegroComponents/AllegroLaptopParameters";
+import { buildOfferParameters } from "./allegroComponents/buildOfferParameters";
+import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
+import { buildMonitorAllegroDescription } from "./templatesAllegro/monitorAllegroDescription";
+import type { Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
+import AllegroDescriptionEditor, { AllegroDescriptionPreview } from "./allegroComponents/AllegroDescriptionEditor";
 
+const ALLEGRO_MONITOR_CATEGORY_ID = "260";
+const ALLEGRO_MONITOR_IMAGE_LIMIT = 16;
 
 type AddMonitorProps = {
     authToken: string,
+    accessTokenAllegro: string,
 }
 
 interface IFormInput {
@@ -72,7 +81,7 @@ function AddMonitor(props: AddMonitorProps) {
     const MONITOR_ATTRIBUTE_GROUP_ID = "50"; // ID grupy atrybutów monitorów w Shoper
     const BASE_ATTRIBUTE_GROUP_ID = "16"; // ID grupy atrybutów bazowych (Stan/Gwarancja)
     const [portsListString, setPortsListString] = useState("");
-    const { register, handleSubmit, watch, setValue, control } = useForm<IFormInput>()
+    const { register, handleSubmit, watch, setValue, control, getValues } = useForm<IFormInput>()
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
@@ -94,11 +103,19 @@ function AddMonitor(props: AddMonitorProps) {
     const [pendingProducerName, setPendingProducerName] = useState<string | null>(null);
     const [updatingProduct, setUpdatingProduct] = useState<boolean>(false);
     const [relatedPackId, setRelatedPackId] = useState("");
+    const [allegroParameters, setAllegroParameters] = useState<ProductParameter[]>([]);
+    const [allegroFormData, setAllegroFormData] = useState<AllegroFormData>({});
+    const [responsibleData, setResponsibleData] = useState<ResponsibleResponse>();
+    const [responsibleProducerId, setResponsibleProducerId] = useState("");
+    const [loadingAllegroData, setLoadingAllegroData] = useState(false);
+    const [addingAllegroOffer, setAddingAllegroOffer] = useState(false);
+    const [allegroTemplate, setAllegroTemplate] = useState<Template>({ sections: [] });
+    const [removedAutoSections, setRemovedAutoSections] = useState<Set<string>>(new Set());
 
     const allAttributes = useMemo(() => {
         const byId = new Map<number, Attribute>();
         [...baseAttributes, ...monitorAttributes].forEach((attr) => {
-            const id = Number((attr as any).attribute_id);
+            const id = Number(attr.attribute_id);
             if (!Number.isFinite(id)) return;
             if (!byId.has(id)) byId.set(id, attr);
         });
@@ -347,60 +364,6 @@ function AddMonitor(props: AddMonitorProps) {
     let showAdditionalInfoSK = ''
     let showPivot = ''
 
-    const test = async () => {
-
-        const apiloAttributesResponse = await axios.patch(`${API_URL}/product/attributes`,
-
-            {
-                "attributes": [
-                    {
-                        "id": 57,
-                        "productId": 50169,
-                        "type": 1,
-                        "values": [
-                            {
-                                "value": "test",
-                            }
-                        ]
-                    }
-                ]
-            }
-
-            , {
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${props.authToken}`
-                }
-            });
-
-
-        const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
-            params: {
-                sku: 'TEST123-123-1',
-            },
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${props.authToken}`
-            }
-        });
-        try {
-            const apiloDeleteResponse = await axios.delete(
-                `${API_URL}/product/apiloProductDelete/47270`,
-                {
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${props.authToken}`
-                    }
-                }
-            );
-        } catch (error) {
-            console.error("Product delete error:", error);
-            toast.error("Wystąpił błąd podczas usuwania produktu");
-            throw error;
-        }
-
-    }
-
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
 
@@ -570,6 +533,49 @@ function AddMonitor(props: AddMonitorProps) {
         fetchProducers();
         fetchAttributes();
     }, []);
+
+    useEffect(() => {
+        if (!props.accessTokenAllegro) {
+            setAllegroParameters([]);
+            setResponsibleData(undefined);
+            return;
+        }
+
+        let cancelled = false;
+        const loadAllegroData = async () => {
+            setLoadingAllegroData(true);
+            try {
+                const [parametersResponse, producersResponse] = await Promise.all([
+                    axios.get(`${API_URL}/product/category-parameters`, {
+                        headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+                        params: { categoryId: ALLEGRO_MONITOR_CATEGORY_ID },
+                    }),
+                    axios.get(`${API_URL}/product/responsibleProducers`, {
+                        headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+                    }),
+                ]);
+                if (cancelled) return;
+                setAllegroParameters(
+                    Array.isArray(parametersResponse.data?.parameters)
+                        ? parametersResponse.data.parameters
+                        : [],
+                );
+                setResponsibleData(producersResponse.data);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Błąd pobierania danych Allegro dla monitorów:", error);
+                    toast.error("Nie udało się pobrać parametrów monitorów z Allegro.");
+                }
+            } finally {
+                if (!cancelled) setLoadingAllegroData(false);
+            }
+        };
+
+        void loadAllegroData();
+        return () => {
+            cancelled = true;
+        };
+    }, [props.accessTokenAllegro]);
 
     const buildShoperAttributes = (data: IFormInput) => {
         const attrs: Record<number, string> = {};
@@ -1060,6 +1066,340 @@ function AddMonitor(props: AddMonitorProps) {
         portsListString
     ));
 
+    const selectedProducerName =
+        producers.find((item) => String(item.producer_id) === String(producer))?.name ?? "";
+    const allegroProducerName = producent || selectedProducerName;
+    const allegroTitleValue = String(watch("allegroTitle", "") || name).trim();
+    const frameForAllegro = Boolean(watch("frame", false));
+    const designForAllegro = Boolean(watch("design", false));
+    const automaticAllegroDescription = useMemo(
+        () => buildMonitorAllegroDescription({
+            producer: allegroProducerName,
+            model,
+            name: allegroTitleValue,
+            visualCondition,
+            caseCondition: chasingCondition,
+            stand,
+            resolution,
+            diagonal,
+            panelType: typeOfMatrix,
+            refreshRate,
+            responseTime,
+            brightness,
+            contrast,
+            connectors,
+            hdr: HDR,
+            pivot,
+            additionalInfo,
+            frame: frameForAllegro,
+            design: designForAllegro,
+        }),
+        [
+            allegroProducerName,
+            model,
+            allegroTitleValue,
+            visualCondition,
+            chasingCondition,
+            stand,
+            resolution,
+            diagonal,
+            typeOfMatrix,
+            refreshRate,
+            responseTime,
+            brightness,
+            contrast,
+            connectors,
+            HDR,
+            pivot,
+            additionalInfo,
+            frameForAllegro,
+            designForAllegro,
+        ],
+    );
+
+    useEffect(() => {
+        const freshById = new Map<string, TemplateSection>(
+            automaticAllegroDescription.description.sections.map((section) => [section.id, section]),
+        );
+
+        setAllegroTemplate((previous) => {
+            const sections: TemplateSection[] = [];
+            previous.sections.forEach((previousSection) => {
+                if (previousSection.origin === "user") {
+                    sections.push(previousSection);
+                    return;
+                }
+                if (removedAutoSections.has(previousSection.id)) return;
+                const freshSection = freshById.get(previousSection.id);
+                if (!freshSection) return;
+                sections.push({
+                    ...freshSection,
+                    items: freshSection.items.map((item, index) => {
+                        const previousItem = previousSection.items[index];
+                        return item.type === "IMAGE"
+                            && previousItem?.type === "IMAGE"
+                            && previousItem.locked
+                            ? previousItem
+                            : item;
+                    }),
+                });
+                freshById.delete(previousSection.id);
+            });
+
+            freshById.forEach((section) => {
+                if (!removedAutoSections.has(section.id)) sections.push(section);
+            });
+            return { sections };
+        });
+    }, [automaticAllegroDescription, removedAutoSections]);
+
+    useEffect(() => {
+        if (!allegroParameters.length) return;
+
+        const normalizeValue = (value: unknown) =>
+            String(value ?? "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, " ")
+                .trim();
+        const shoperValues = new Map<string, unknown>();
+        allAttributes.forEach((attribute) => {
+            const id = Number(attribute.attribute_id);
+            if (!Number.isFinite(id)) return;
+            shoperValues.set(
+                normalizeValue(attribute.name),
+                watch(`attribute_${id}`, ""),
+            );
+        });
+
+        const explicitValues: Record<string, unknown> = {
+            marka: allegroProducerName,
+            producent: allegroProducerName,
+            model,
+            "kod producenta": model,
+            stan: getAttrValueByNames(["Stan"]),
+            "przekatna ekranu": diagonal,
+            przekatna: diagonal,
+            rozdzielczosc: resolution,
+            "rozdzielczosc px": resolution,
+            "typ matrycy": typeOfMatrix,
+            "rodzaj matrycy": typeOfMatrix,
+            "czestotliwosc odswiezania": refreshRate,
+            odswiezanie: refreshRate,
+            "czas reakcji": responseTime,
+            jasnosc: brightness,
+            kontrast: contrast,
+            zlacza: connectors,
+            hdr: HDR,
+            pivot,
+        };
+
+        const matchDictionaryValue = (parameter: ProductParameter, rawValue: unknown) => {
+            const dictionary = Array.isArray(parameter.dictionary) ? parameter.dictionary : [];
+            if (!dictionary.length) return rawValue;
+            const rawItems = Array.isArray(rawValue)
+                ? rawValue
+                : String(rawValue ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+            const matched = rawItems.flatMap((rawItem) => {
+                const normalizedRaw = normalizeValue(rawItem);
+                const option = dictionary.find((entry) => {
+                    const normalizedOption = normalizeValue(entry.value);
+                    return normalizedOption === normalizedRaw
+                        || normalizedRaw.includes(normalizedOption)
+                        || normalizedOption.includes(normalizedRaw);
+                });
+                return option ? [option.value] : [];
+            });
+            if (!matched.length) {
+                return parameter.restrictions?.multipleChoices ? [] : "";
+            }
+            return parameter.restrictions?.multipleChoices ? Array.from(new Set(matched)) : matched[0];
+        };
+
+        setAllegroFormData((previous) => {
+            const next = { ...previous };
+            allegroParameters.forEach((parameter) => {
+                const existing = next[parameter.name];
+                if (Array.isArray(existing) ? existing.length > 0 : String(existing ?? "").trim()) return;
+                const normalizedName = normalizeValue(parameter.name);
+                const candidate = explicitValues[normalizedName] ?? shoperValues.get(normalizedName);
+                if (candidate == null || String(candidate).trim() === "") return;
+                next[parameter.name] = matchDictionaryValue(parameter, candidate) as string | string[];
+            });
+            return next;
+        });
+    }, [
+        allegroParameters,
+        allegroProducerName,
+        model,
+        diagonal,
+        resolution,
+        typeOfMatrix,
+        refreshRate,
+        responseTime,
+        brightness,
+        contrast,
+        connectors,
+        HDR,
+        pivot,
+        allAttributes,
+        watch,
+    ]);
+
+    const handleAddAllegroOffer = async () => {
+        if (!props.accessTokenAllegro) {
+            toast.error("Brak tokenu Allegro. Zaloguj się ponownie.");
+            return;
+        }
+        if (!responsibleProducerId) {
+            toast.error("Wybierz producenta odpowiedzialnego.");
+            return;
+        }
+        if (!imageLinks.length) {
+            toast.error("Dodaj co najmniej jedno zdjęcie monitora.");
+            return;
+        }
+
+        const missingRequired = allegroParameters
+            .filter((parameter) => parameter.required)
+            .filter((parameter) => {
+                const value = allegroFormData[parameter.name];
+                return Array.isArray(value) ? value.length === 0 : !String(value ?? "").trim();
+            })
+            .map((parameter) => parameter.name);
+        if (missingRequired.length) {
+            toast.error(`Uzupełnij wymagane parametry Allegro: ${missingRequired.slice(0, 5).join(", ")}${missingRequired.length > 5 ? "…" : ""}`);
+            return;
+        }
+
+        const title = String(getValues("allegroTitle") || name).trim();
+        const price = Number(getValues("allegroPrice") ?? getValues("price"));
+        const stock = Number(getValues("stock"));
+        if (!title || title.length > 75) {
+            toast.error("Tytuł Allegro musi mieć od 1 do 75 znaków.");
+            return;
+        }
+        if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock < 0) {
+            toast.error("Podaj poprawną cenę i ilość dla Allegro.");
+            return;
+        }
+
+        const descriptionAllegroTemplate = {
+            sections: allegroTemplate.sections
+                .map((section) => ({
+                    items: section.items.flatMap((item): TemplateItem[] => {
+                        if (item.type === "TEXT" && item.content.trim()) {
+                            return [{ type: "TEXT", content: item.content }];
+                        }
+                        if (item.type === "IMAGE" && item.url.trim()) {
+                            return [{ type: "IMAGE", url: item.url.trim() }];
+                        }
+                        return [];
+                    }),
+                }))
+                .filter((section) => section.items.length > 0),
+        };
+        if (!descriptionAllegroTemplate.sections.length) {
+            toast.error("Opis Allegro nie zawiera żadnej sekcji.");
+            return;
+        }
+
+        const templateImages = Array.from(new Set(
+            descriptionAllegroTemplate.sections.flatMap((section) =>
+                section.items.flatMap((item) => item.type === "IMAGE" ? [item.url] : [])
+            ),
+        ));
+        if (templateImages.length > ALLEGRO_MONITOR_IMAGE_LIMIT) {
+            toast.error(`Opis zawiera ${templateImages.length} różnych zdjęć. Allegro pozwala użyć maksymalnie ${ALLEGRO_MONITOR_IMAGE_LIMIT}.`);
+            return;
+        }
+        const templateImageSet = new Set(templateImages);
+        const productImagesUsedInDescription = imageLinks.filter((url) => templateImageSet.has(url));
+        const optionalProductImages = imageLinks
+            .filter((url) => !templateImageSet.has(url))
+            .slice(0, ALLEGRO_MONITOR_IMAGE_LIMIT - templateImages.length);
+        const templateImagesOutsideProductGallery = templateImages.filter((url) => !imageLinks.includes(url));
+        const offerImages = Array.from(new Set([
+            ...productImagesUsedInDescription,
+            ...optionalProductImages,
+            ...templateImagesOutsideProductGallery,
+        ]));
+        const productParameters = buildOfferParameters(
+            allegroFormData,
+            true,
+            allegroParameters,
+        );
+        const offerParameters = buildOfferParameters(
+            allegroFormData,
+            false,
+            allegroParameters,
+        );
+        const shippingRateName = String(
+            getValues("allegroShippingRate") || "MONITORY",
+        ).trim();
+
+        const productData = {
+            name: title,
+            productSet: [{
+                product: {
+                    name: title,
+                    category: { id: ALLEGRO_MONITOR_CATEGORY_ID },
+                    parameters: productParameters,
+                    images: offerImages,
+                },
+                responsibleProducer: {
+                    type: "ID",
+                    id: responsibleProducerId,
+                },
+                safetyInformation: {
+                    type: "TEXT",
+                    description: "Monitor należy ustawić na stabilnej powierzchni i użytkować w suchym, wentylowanym miejscu. Należy korzystać ze sprawnego przewodu zasilającego, nie zasłaniać otworów wentylacyjnych i odłączyć urządzenie od zasilania przed czyszczeniem. Uszkodzony przewód lub obudowa wymagają kontroli serwisu.",
+                },
+            }],
+            sellingMode: {
+                format: "BUY_NOW",
+                price: { amount: price.toFixed(2), currency: "PLN" },
+            },
+            stock: { available: Math.trunc(stock) },
+            publication: { status: "INACTIVE" },
+            ...(offerParameters.length ? { parameters: offerParameters } : {}),
+            external: { id: String(getValues("SKU") ?? "").trim() },
+            delivery: {
+                shippingRates: { name: shippingRateName },
+            },
+            afterSalesServices: {
+                impliedWarranty: { name: "Standardowe" },
+                returnPolicy: { name: "15 dni Myślenice" },
+            },
+            description: descriptionAllegroTemplate,
+        };
+
+        setAddingAllegroOffer(true);
+        try {
+            await axios.post(`${API_URL}/product/allegroProduct`, productData, {
+                headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+            });
+            toast.success("Utworzono nieaktywny szkic monitora na Allegro.");
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const apiError = error.response?.data;
+                const allegroError = apiError?.errors?.[0];
+                const message = allegroError?.userMessage
+                    || allegroError?.message
+                    || apiError?.message
+                    || error.message;
+                console.error("Błąd wystawiania monitora na Allegro:", apiError);
+                toast.error(`Błąd Allegro: ${message}`);
+            } else {
+                console.error("Błąd aplikacji podczas wystawiania monitora:", error);
+                toast.error("Nie udało się utworzyć szkicu na Allegro.");
+            }
+        } finally {
+            setAddingAllegroOffer(false);
+        }
+    };
+
     useEffect(() => {
         if (typeOfMatrix == "IPS") {
             showTN = 'none !important'
@@ -1222,6 +1562,7 @@ function AddMonitor(props: AddMonitorProps) {
                                     <MenuItem value="description">Polski</MenuItem>
                                     <MenuItem value="descriptionCZ">Czeski</MenuItem>
                                     <MenuItem value="descriptionSK">Słowacki</MenuItem>
+                                    <MenuItem value="descriptionAllegro">Allegro</MenuItem>
 
                                 </Select>
                             </FormControl>
@@ -1411,10 +1752,98 @@ function AddMonitor(props: AddMonitorProps) {
                                     hidden
                                 />
                             </Button>
-                            <Button onClick={test}>test</Button>
                             <Typography>
                                 {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
                             </Typography>
+
+                            <Box
+                                sx={{
+                                    mt: 2,
+                                    p: 2,
+                                    display: "grid",
+                                    gap: 2,
+                                    borderRadius: 2,
+                                    border: "1px solid rgba(255,255,255,0.12)",
+                                    backgroundColor: "rgba(20, 23, 33, 0.35)",
+                                }}
+                            >
+                                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                                    Wystaw bezpośrednio na Allegro
+                                </Typography>
+                                <Typography variant="body2" sx={{ opacity: 0.75 }}>
+                                    Oferta zostanie utworzona jako nieaktywny szkic w kategorii Monitory.
+                                    Parametry uzupełniamy automatycznie z atrybutów Shopera, a brakujące
+                                    wartości możesz poprawić poniżej.
+                                </Typography>
+
+                                {!props.accessTokenAllegro ? (
+                                    <Typography color="error">
+                                        Brak tokenu Allegro. Użyj przycisku „Zaloguj przez Allegro” u góry strony.
+                                    </Typography>
+                                ) : null}
+
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Tytuł Allegro"
+                                        inputProps={{ maxLength: 75 }}
+                                        InputLabelProps={{ shrink: true }}
+                                        {...register("allegroTitle")}
+                                    />
+                                    <TextField
+                                        label="Cena Allegro"
+                                        type="number"
+                                        InputLabelProps={{ shrink: true }}
+                                        {...register("allegroPrice", { valueAsNumber: true })}
+                                    />
+                                    <TextField
+                                        label="Nazwa cennika dostawy Allegro"
+                                        defaultValue="MONITORY"
+                                        InputLabelProps={{ shrink: true }}
+                                        {...register("allegroShippingRate")}
+                                    />
+                                    <ResponsibleProducerSelect
+                                        data={responsibleData}
+                                        value={responsibleProducerId}
+                                        onChange={setResponsibleProducerId}
+                                    />
+                                </Stack>
+
+                                {loadingAllegroData ? (
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <CircularProgress size={20} />
+                                        <Typography>Pobieranie parametrów Allegro…</Typography>
+                                    </Stack>
+                                ) : (
+                                    <AllegroMonitorParameters
+                                        Parameters={allegroParameters}
+                                        formData={allegroFormData}
+                                        register={register}
+                                        handleChangeAllegro={(parameterName, value) => {
+                                            setAllegroFormData((previous) => ({
+                                                ...previous,
+                                                [parameterName]: value,
+                                            }));
+                                        }}
+                                        isParamDisabled={() => false}
+                                    />
+                                )}
+
+                                <Button
+                                    type="button"
+                                    variant="contained"
+                                    color="success"
+                                    onClick={handleAddAllegroOffer}
+                                    disabled={
+                                        !props.accessTokenAllegro
+                                        || loadingAllegroData
+                                        || addingAllegroOffer
+                                    }
+                                >
+                                    {addingAllegroOffer
+                                        ? "Tworzenie szkicu…"
+                                        : "Wystaw monitor na Allegro"}
+                                </Button>
+                            </Box>
 
                             <Button variant="outlined" type="reset"  >Reset formularza</Button>
                             <Button variant="contained" type="submit" >Dodaj</Button>
@@ -1429,6 +1858,32 @@ function AddMonitor(props: AddMonitorProps) {
                         </ThemeProvider>
                     </Box>
                 </form>
+                {descriptionLanguage === "descriptionAllegro" ? (
+                    <AllegroDescriptionEditor
+                        template={allegroTemplate}
+                        onChange={setAllegroTemplate}
+                        availableImages={[
+                            ...imageLinks,
+                            ...automaticAllegroDescription.assetImages,
+                        ]}
+                        onRemoveAutoSection={(sectionId) => {
+                            setRemovedAutoSections((previous) => {
+                                const next = new Set(previous);
+                                next.add(sectionId);
+                                return next;
+                            });
+                        }}
+                        onRestoreAutomaticSections={() => {
+                            setRemovedAutoSections(new Set());
+                            setAllegroTemplate((previous) => ({
+                                sections: [
+                                    ...automaticAllegroDescription.description.sections,
+                                    ...previous.sections.filter((section) => section.origin === "user"),
+                                ],
+                            }));
+                        }}
+                    />
+                ) : null}
                 <div className="preview">
                     {descriptionLanguage === 'description' && (
                         <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
@@ -1440,6 +1895,16 @@ function AddMonitor(props: AddMonitorProps) {
 
                     {descriptionLanguage === 'descriptionSK' && (
                         <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: descriptionSK }} />
+                    )}
+                    {descriptionLanguage === "descriptionAllegro" && (
+                        <AllegroDescriptionPreview
+                            template={allegroTemplate}
+                            onChange={setAllegroTemplate}
+                            availableImages={[
+                                ...imageLinks,
+                                ...automaticAllegroDescription.assetImages,
+                            ]}
+                        />
                     )}
                 </div>
             </div>

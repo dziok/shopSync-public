@@ -60,13 +60,14 @@ type MonthlyComputerCount = {
     auto: number;
     manual: number;
 };
-type MonthlyComputerTargetScheduleMode = "always" | "off" | "alternate_a" | "alternate_b";
+type MonthlyComputerTargetScheduleMode = "always" | "off" | "alternate_a" | "alternate_b" | "alternate_c";
 type MonthlyComputerTargetSchedule = {
     mode: MonthlyComputerTargetScheduleMode;
 };
 type MonthlyComputerAssignment = {
     timezone?: string;
     alternateAnchorDate?: string;
+    mondayAllActive?: boolean;
     targetSchedules?: Record<number, MonthlyComputerTargetSchedule>;
     weekdayTargets: Partial<Record<RotationDayKey, number[]>>;
     monthlyCounts: Record<string, Record<number, MonthlyComputerCount>>;
@@ -106,6 +107,7 @@ const getCurrentMonthString = () => {
 const createDefaultMonthlyComputerAssignment = (targetIds: number[]): MonthlyComputerAssignment => ({
     timezone: "Europe/Warsaw",
     alternateAnchorDate: getTodayDateString(),
+    mondayAllActive: false,
     targetSchedules: targetIds.reduce((acc, id) => {
         acc[id] = { mode: "always" };
         return acc;
@@ -159,6 +161,8 @@ const normalizeMonthlyComputerAssignment = (raw: any, targetIds: number[]): Mont
                 ? "alternate_a"
                 : rawSchedule?.mode === "alternate_b"
                     ? "alternate_b"
+                    : rawSchedule?.mode === "alternate_c"
+                        ? "alternate_c"
                     : "always";
         acc[id] = { mode };
         return acc;
@@ -188,6 +192,7 @@ const normalizeMonthlyComputerAssignment = (raw: any, targetIds: number[]): Mont
         alternateAnchorDate: typeof raw?.alternateAnchorDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.alternateAnchorDate)
             ? raw.alternateAnchorDate
             : defaults.alternateAnchorDate,
+        mondayAllActive: typeof raw?.mondayAllActive === "boolean" ? raw.mondayAllActive : false,
         targetSchedules,
         weekdayTargets,
         monthlyCounts,
@@ -332,6 +337,7 @@ type LineProps = {
     adjustMonthlyManualCount?: (statusId: number, month: string, delta: number) => void;
     setMonthlyTargetScheduleMode?: (statusId: number, mode: MonthlyComputerTargetScheduleMode) => void;
     setMonthlyAlternateAnchorDate?: (date: string) => void;
+    setMonthlyMondayAllActive?: (enabled: boolean) => void;
 };
 
 const isPlainObject = (v: any) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -462,7 +468,8 @@ const LineCard: React.FC<LineProps> = ({
     setMonthlyManualCount,
     adjustMonthlyManualCount,
     setMonthlyTargetScheduleMode,
-    setMonthlyAlternateAnchorDate
+    setMonthlyAlternateAnchorDate,
+    setMonthlyMondayAllActive,
 
 }) => {
     const disabled = !active;
@@ -805,17 +812,32 @@ const LineCard: React.FC<LineProps> = ({
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
                                     Włączone osoby według dnia tygodnia
                                 </Typography>
-                                <TextField
-                                    type="date"
-                                    size="small"
-                                    label="Start naprzemienności"
-                                    value={monthlyComputerAssignment.alternateAnchorDate ?? getTodayDateString()}
-                                    disabled={disabled}
-                                    onChange={(e) => setMonthlyAlternateAnchorDate?.(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ mb: 1, maxWidth: 260 }}
-                                    fullWidth
-                                />
+                                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} sx={{ mb: 1 }}>
+                                    <TextField
+                                        type="date"
+                                        size="small"
+                                        label="Start naprzemienności"
+                                        value={monthlyComputerAssignment.alternateAnchorDate ?? getTodayDateString()}
+                                        disabled={disabled}
+                                        onChange={(e) => setMonthlyAlternateAnchorDate?.(e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ maxWidth: 260 }}
+                                        fullWidth
+                                    />
+                                    <FormControlLabel
+                                        control={(
+                                            <Checkbox
+                                                checked={!!monthlyComputerAssignment.mondayAllActive}
+                                                disabled={disabled}
+                                                onChange={(e) => setMonthlyMondayAllActive?.(e.target.checked)}
+                                            />
+                                        )}
+                                        label="Poniedziałek aktywny dla wszystkich"
+                                    />
+                                </Stack>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                    Poniedziałek nie resetuje ani nie przesuwa cyklu A/B lub A/B/C. Tryb „Wyłączona codziennie” pozostaje wyłączony.
+                                </Typography>
                                 <Paper variant="outlined" sx={{ overflow: "hidden" }}>
                                     <Table size="small">
                                         <TableHead>
@@ -848,6 +870,7 @@ const LineCard: React.FC<LineProps> = ({
                                                                     <MenuItem value="off">Wyłączona codziennie</MenuItem>
                                                                     <MenuItem value="alternate_a">Naprzemiennie A</MenuItem>
                                                                     <MenuItem value="alternate_b">Naprzemiennie B</MenuItem>
+                                                                    <MenuItem value="alternate_c">Naprzemiennie C</MenuItem>
                                                                 </Select>
                                                             </FormControl>
                                                         </TableCell>
@@ -1106,7 +1129,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
     const [line1RotationDays, setLine1RotationDays] = useState<Record<RotationDayKey, RotationDayConfig>>(createDefaultRotationDays());
     const [line1RotationCycleAnchorDate, setLine1RotationCycleAnchorDate] = useState(getTodayDateString());
     const [line1MonthlyComputerAssignment, setLine1MonthlyComputerAssignment] = useState<MonthlyComputerAssignment>(
-        createDefaultMonthlyComputerAssignment([159, 156, 208, 225]),
+        createDefaultMonthlyComputerAssignment([159, 156, 228]),
     );
     const [line1SelectedMonth, setLine1SelectedMonth] = useState(getCurrentMonthString());
 
@@ -1120,8 +1143,8 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
     // L1
     const [line1Active, setLine1Active] = useState(true);
     const [line1SourceStatusId, setLine1SourceStatusId] = useState(63);
-    const [line1TargetStatusIds, setLine1TargetStatusIds] = useState<number[]>([159, 156, 208, 225]);
-    const [line1TargetLimits, setLine1TargetLimits] = useState<LimitsMap>({ 159: 2, 156: 2, 208: 2, 225: 2 });
+    const [line1TargetStatusIds, setLine1TargetStatusIds] = useState<number[]>([159, 156, 228]);
+    const [line1TargetLimits, setLine1TargetLimits] = useState<LimitsMap>({ 159: 2, 156: 2, 228: 2 });
     const [line1MaxLarge, setLine1MaxLarge] = useState(9);
     const [line1Methods, setLine1Methods] = useState<string[]>([]);
     const [newMethod1, setNewMethod1] = useState("");
@@ -1147,8 +1170,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
     const line1Names: Record<number, string> = useMemo(() => ({
         159: "Mateusz Sabała",
         156: "Dariusz Sikora",
-        208: "Kacper Firek",
-        225: "Jakub Błachut",
+        228: "Mateusz Jania",
     }), []);
 
     const line2Names: Record<number, string> = useMemo(() => ({
@@ -1161,7 +1183,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
         211: "Alan Janosz Serwis",
     }), []);
 
-    const line1TargetsAll = useMemo(() => [159, 156, 208, 225], []);
+    const line1TargetsAll = useMemo(() => [159, 156, 228], []);
     const line2TargetsAll = useMemo(() => [170, 173, 176, 179, 207, 182, 211], []);
     const [serverSnapshot, setServerSnapshot] = useState<any | null>(null);
     const [serverRevision, setServerRevision] = useState<number | null>(null);
@@ -1219,6 +1241,13 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
         setLine1MonthlyComputerAssignment((prev) => ({
             ...prev,
             alternateAnchorDate: date,
+        }));
+    };
+
+    const setLine1MonthlyMondayAllActive = (enabled: boolean) => {
+        setLine1MonthlyComputerAssignment((prev) => ({
+            ...prev,
+            mondayAllActive: enabled,
         }));
     };
 
@@ -1668,6 +1697,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                             adjustMonthlyManualCount={adjustLine1MonthlyManualCount}
                             setMonthlyTargetScheduleMode={setLine1MonthlyTargetScheduleMode}
                             setMonthlyAlternateAnchorDate={setLine1MonthlyAlternateAnchorDate}
+                            setMonthlyMondayAllActive={setLine1MonthlyMondayAllActive}
                         />
                     </Grid>
 
