@@ -127,6 +127,7 @@ export const matrixGradeDescriptiosCZ: {
     "Klasa A": string,
     "Klasa A-(duszki)": string,
     "Klasa A-(duszki+przetarcia)": string,
+    "Klasa A-(duszki+przetarcia) kat 2": string,
     "Klasa A-(przetarcia)": string,
     "Klasa A-(ryski)": string,
     "Stan bardzo dobry": string
@@ -134,6 +135,7 @@ export const matrixGradeDescriptiosCZ: {
     "Klasa A": "Třída A",
     "Klasa A-(duszki)": "Třída A- na displeji jsou drobné barevné vady, které nevadí při každodenním používání",
     "Klasa A-(duszki+przetarcia)": "Třída A- na displeji jsou drobné barevné vady a oděrky, které nevadí při každodenním používání",
+    "Klasa A-(duszki+przetarcia) kat 2": "Třída A- na displeji jsou barevné vady a oděrky, které nevadí při každodenním používání",
     "Klasa A-(przetarcia)": "Třída A- na displeji jsou drobné oděrky, které nevadí při každodenním používání",
     "Klasa A-(ryski)": "Třída A- na displeji jsou drobné škrábance, které nevadí při každodenním používání",
     "Stan bardzo dobry": "Velmi dobrý stav"
@@ -144,6 +146,7 @@ export const matrixGradeDescriptiosSK: {
     "Klasa A": string,
     "Klasa A-(duszki)": string,
     "Klasa A-(duszki+przetarcia)": string,
+    "Klasa A-(duszki+przetarcia) kat 2": string,
     "Klasa A-(przetarcia)": string,
     "Klasa A-(ryski)": string,
     "Stan bardzo dobry": string
@@ -151,6 +154,7 @@ export const matrixGradeDescriptiosSK: {
     "Klasa A": "Trieda A",
     "Klasa A-(duszki)": "Trieda A- na displeji sú jemné farebné vady, ktoré neprekážajú pri každodennom používaní",
     "Klasa A-(duszki+przetarcia)": "Trieda A- na displeji sú jemné farebné vady a oderky, ktoré neprekážajú pri každodennom používaní",
+    "Klasa A-(duszki+przetarcia) kat 2": "Trieda A- na displeji sú farebné vady a oderky, ktoré neprekážajú pri každodennom používaní",
     "Klasa A-(przetarcia)": "Trieda A- na displeji sú jemné oderky, ktoré neprekážajú pri každodennom používaní",
     "Klasa A-(ryski)": "Trieda A- na displeji sú jemné ryhy, ktoré neprekážajú pri každodennom používaní",
     "Stan bardzo dobry": "Veľmi dobrý stav"
@@ -244,4 +248,3 @@ export const batteryDescriptionSK: {
     "Bateria(5h)": "batéria – približne 5 hodín prevádzky na batériu, zvyčajne je tento čas výrazne dlhší.",
     "Nowa Bateria": "NOVÁ batéria",
 };
-

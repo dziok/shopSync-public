@@ -836,7 +836,7 @@ const LineCard: React.FC<LineProps> = ({
                                     />
                                 </Stack>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                                    Poniedziałek nie resetuje ani nie przesuwa cyklu A/B lub A/B/C. Tryb „Wyłączona codziennie” pozostaje wyłączony.
+                                    A/B włącza jedną osobę dziennie. A/B/C włącza kolejno pary A+B, B+C, C+A. Poniedziałek nie przesuwa cyklu, a tryb „Wyłączona codziennie” pozostaje wyłączony.
                                 </Typography>
                                 <Paper variant="outlined" sx={{ overflow: "hidden" }}>
                                     <Table size="small">

@@ -32,8 +32,12 @@ import { handleGetAttributeList } from "../backendQueries/handleGetAttributeList
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import { buildOfferParameters } from "./allegroComponents/buildOfferParameters";
-import { AllegroLaptopTemplate, Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
-import { LaptopAttributeForm } from "./shoperParametersOrder/LaptopParametersOrder";
+import { ALLEGRO_LAPTOP_TEMPLATE_REVISION, AllegroLaptopTemplate, Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
+import {
+    LaptopAttributeForm,
+    MATRIX_GRADE_GHOSTS_AND_SCUFFS,
+    MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2,
+} from "./shoperParametersOrder/LaptopParametersOrder";
 import { buildIntroText, dellSeriesHtml, laptopAdditionalText2 } from "./templatesAllegro/laptopAdditionalInfo";
 import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
@@ -715,6 +719,9 @@ function AddLaptopNew(props: AddProductProps) {
 
     const libreOfficeAttrId = getAttributeIdByName("Libre Office");
     const win11InfoAttrId = getAttributeIdByName("Informacja o Windows 11");
+    const biosPasswordInfoAttrId = getAttributeIdByName("Informacja o haśle BIOS");
+    const wifiAttrId = getAttributeIdByName("WiFi") ?? getAttributeIdByName("Wi-Fi");
+    const bluetoothAttrId = getAttributeIdByName("Bluetooth");
     const additionalKeyboardAttrId = getAttributeIdByName("Dodatkowy opis klawiatury");
     const additionalMatrixAttrId = getAttributeIdByName("Dodatkowy opis matrycy");
     const additionalCaseAttrId = getAttributeIdByName("Dodatkowy opis obudowy");
@@ -732,6 +739,9 @@ function AddLaptopNew(props: AddProductProps) {
 
     const resolveShoperOptionValue = (attribute: Attribute | undefined, value: unknown) => {
         const raw = coerceToString(value);
+        if (raw === MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2) {
+            return MATRIX_GRADE_GHOSTS_AND_SCUFFS;
+        }
         if (!raw.startsWith(SHOPER_OPTION_PREFIX)) return raw;
         const optionId = raw.slice(SHOPER_OPTION_PREFIX.length);
         const option =
@@ -849,7 +859,25 @@ function AddLaptopNew(props: AddProductProps) {
                 setValue(`attribute_${win11InfoAttrId}`, false, { shouldDirty: false, shouldValidate: false });
             }
         }
-    }, [getValues, libreOfficeAttrId, setValue, win11InfoAttrId]);
+        if (biosPasswordInfoAttrId) {
+            const currentValue = getValues(`attribute_${biosPasswordInfoAttrId}`);
+            if (currentValue == null || currentValue === "") {
+                setValue(`attribute_${biosPasswordInfoAttrId}`, false, { shouldDirty: false, shouldValidate: false });
+            }
+        }
+        if (wifiAttrId) {
+            const currentValue = getValues(`attribute_${wifiAttrId}`);
+            if (currentValue == null || currentValue === "") {
+                setValue(`attribute_${wifiAttrId}`, true, { shouldDirty: false, shouldValidate: false });
+            }
+        }
+        if (bluetoothAttrId) {
+            const currentValue = getValues(`attribute_${bluetoothAttrId}`);
+            if (currentValue == null || currentValue === "") {
+                setValue(`attribute_${bluetoothAttrId}`, true, { shouldDirty: false, shouldValidate: false });
+            }
+        }
+    }, [biosPasswordInfoAttrId, bluetoothAttrId, getValues, libreOfficeAttrId, setValue, wifiAttrId, win11InfoAttrId]);
 
     // *** OBSERWACJA PÓL FORMULARZA (watch) ***
     // Podstawowe pola (Shoper)
@@ -895,10 +923,10 @@ function AddLaptopNew(props: AddProductProps) {
     const shoper_LAN = watch("attribute_338");
     const shoper_dockingPort = watch("attribute_321");
     const shoper_vebCam = watch("attribute_330");
-    const shoper_wifi = watch("attribute_325");
+    const shoper_wifi = watch(wifiAttrId ? `attribute_${wifiAttrId}` : "attribute_325", true);
     const shoper_modem = watch("attribute_328");
     const shoper_thunderbolt = watch("attribute_335");
-    const shoper_bluetooth = watch("attribute_326");
+    const shoper_bluetooth = watch(bluetoothAttrId ? `attribute_${bluetoothAttrId}` : "attribute_326", true);
     const shoper_cardReader = watch("attribute_332");
     const shoper_driveType = watch("attribute_339"); // Typ napędu (DVD/Blu-ray)
     const shoper_battery = watch("attribute_825");
@@ -918,6 +946,10 @@ function AddLaptopNew(props: AddProductProps) {
     );
     const showWin11info = watch(
         win11InfoAttrId ? `attribute_${win11InfoAttrId}` : "showWin11info",
+        false
+    );
+    const showBiosPasswordInfo = watch(
+        biosPasswordInfoAttrId ? `attribute_${biosPasswordInfoAttrId}` : "showBiosPasswordInfo",
         false
     );
     const introText = watch("introText", "");
@@ -2102,6 +2134,7 @@ function AddLaptopNew(props: AddProductProps) {
                 touchScreen: String(shoper_touchScreen ?? ""),
                 showModem: Boolean(shoper_modem),
                 showWin11info: Boolean(showWin11info),
+                showBiosPasswordInfo: Boolean(showBiosPasswordInfo),
                 producer: String(producerName ?? ""),
                 model: String(shoper_model ?? name),
                 ports: portList,
@@ -2185,6 +2218,7 @@ function AddLaptopNew(props: AddProductProps) {
 
         return () => clearTimeout(timer);
     }, [
+        ALLEGRO_LAPTOP_TEMPLATE_REVISION,
         formData,
         shoper_system,
         shoper_cpu,
@@ -2210,6 +2244,7 @@ function AddLaptopNew(props: AddProductProps) {
         shoper_touchScreen,
         shoper_modem,
         showWin11info,
+        showBiosPasswordInfo,
         shoper_refurbProcess,
         refurbProcessAttrId,
         deferredAdditionalInfoKeyboard,
@@ -2451,7 +2486,7 @@ function AddLaptopNew(props: AddProductProps) {
         batteryDescription[shoper_battery], matrixTextPL, gradeTextPL, keyboardValue,
         /* showWin11 */ shoper_system.includes("Windows 11"), /* showWin10 */ shoper_system.includes("Windows 10"), /* showMacOS */ shoper_system.includes("macOS"),
         deferredAdditionalInfoKeyboard, deferredAdditionalInfoCase, deferredAdditionalInfoMatrix,
-        String(shoper_touchScreen), Boolean(shoper_modem), Boolean(showWin11info)
+        String(shoper_touchScreen), Boolean(shoper_modem), Boolean(showWin11info), Boolean(showBiosPasswordInfo)
     ));
     const descriptionCZ = watch("descriptionCZ", LaptopTemplateCZ(
         shoper_system, shoper_cpu, shoper_cpuModel, shoper_gpu, shoper_diskType, shoper_diskSize, shoper_ramType, shoper_ramAmount, shoper_resolution, Boolean(shoper_vebCam), Boolean(showLibre),
@@ -2519,7 +2554,7 @@ function AddLaptopNew(props: AddProductProps) {
                 batteryDescription[shoper_battery], matrixTextPL, gradeTextPL, keyboardFallback,
                 showWin11, showWin10, showMacOS,
                 deferredAdditionalInfoKeyboard, deferredAdditionalInfoCase, deferredAdditionalInfoMatrix,
-                String(shoper_touchScreen), Boolean(shoper_modem), Boolean(showWin11info)
+                String(shoper_touchScreen), Boolean(shoper_modem), Boolean(showWin11info), Boolean(showBiosPasswordInfo)
             ));
             setValue("descriptionCZ", LaptopTemplateCZ(
                 shoper_system, shoper_cpu, shoper_cpuModel, shoper_gpu, shoper_diskType, shoper_diskSize, shoper_ramType, shoper_ramAmount, shoper_resolution,
@@ -2556,7 +2591,7 @@ function AddLaptopNew(props: AddProductProps) {
         shoper_system, shoper_cpu, shoper_cpuModel, shoper_cores, shoper_threads, shoper_frequency, shoper_frequency_turbo,
         shoper_ramAmount, shoper_ramType, shoper_gpu, shoper_diskType, shoper_diskSize, shoper_resolution,
         shoper_vebCam, showLibre, shoper_battery, shoper_matrixGrade, shoper_grade, gradeDescriptionKey, shoper_keyboardLayout,
-        shoper_touchScreen, shoper_modem, showWin11info, skipCaseDescription, skipMatrixDescription,
+        shoper_touchScreen, shoper_modem, showWin11info, showBiosPasswordInfo, skipCaseDescription, skipMatrixDescription,
         deferredAdditionalInfoKeyboard, deferredAdditionalInfoCase, deferredAdditionalInfoMatrix,
         additinalKeyboardInfoCZ, additinalcaseInfoCZ, additinalMatrixInfoCZ,
         additinalKeyboardInfoSK, additinalcaseInfoSK, additinalMatrixInfoSK,

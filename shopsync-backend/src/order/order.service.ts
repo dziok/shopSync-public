@@ -127,6 +127,28 @@ export class ApiloOrderService {
         return count;
     }
 
+    private diffAssignmentRotationDays(dateA: string, dateB: string, skipMondays: boolean): number {
+        if (!skipMondays) return this.diffBusinessDays(dateA, dateB);
+
+        const direction = this.diffDays(dateA, dateB) >= 0 ? 1 : -1;
+        let current = dateB;
+        let count = 0;
+
+        while (current !== dateA) {
+            if (direction > 0) {
+                const weekday = this.getWeekdayFromDateString(current);
+                if (weekday >= 2 && weekday <= 5) count += 1;
+                current = this.addDays(current, 1);
+            } else {
+                current = this.addDays(current, -1);
+                const weekday = this.getWeekdayFromDateString(current);
+                if (weekday >= 2 && weekday <= 5) count -= 1;
+            }
+        }
+
+        return count;
+    }
+
     private getRotationDayKey(weekday: number): RotationDayKey {
         return ROTATION_DAY_KEYS[Math.max(0, Math.min(ROTATION_DAY_KEYS.length - 1, weekday - 1))];
     }
@@ -263,7 +285,11 @@ export class ApiloOrderService {
 
         if (assignment?.targetSchedules) {
             if (todayKey === 'saturday' || todayKey === 'sunday') return [];
-            const businessDayIndex = Math.max(0, this.diffBusinessDays(todayDate, anchorDate));
+            const businessDayIndex = Math.max(0, this.diffAssignmentRotationDays(
+                todayDate,
+                anchorDate,
+                !!assignment.mondayAllActive,
+            ));
             const usesThreeDayCycle = baseTargets.some((targetId) => {
                 const schedule = assignment.targetSchedules?.[targetId] ?? (assignment.targetSchedules as any)?.[String(targetId)];
                 return schedule?.mode === 'alternate_c';
@@ -275,9 +301,15 @@ export class ApiloOrderService {
                 const mode = schedule?.mode ?? 'always';
                 if (mode === 'off') return false;
                 if (assignment.mondayAllActive && todayKey === 'monday') return true;
-                if (mode === 'alternate_a') return businessDayIndex % cycleLength === 0;
-                if (mode === 'alternate_b') return businessDayIndex % cycleLength === 1;
-                if (mode === 'alternate_c') return businessDayIndex % cycleLength === 2;
+                const cyclePosition = businessDayIndex % cycleLength;
+                if (usesThreeDayCycle) {
+                    if (mode === 'alternate_a') return cyclePosition === 0 || cyclePosition === 2;
+                    if (mode === 'alternate_b') return cyclePosition === 0 || cyclePosition === 1;
+                    if (mode === 'alternate_c') return cyclePosition === 1 || cyclePosition === 2;
+                }
+                if (mode === 'alternate_a') return cyclePosition === 0;
+                if (mode === 'alternate_b') return cyclePosition === 1;
+                if (mode === 'alternate_c') return false;
                 return true;
             });
         }

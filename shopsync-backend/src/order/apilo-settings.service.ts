@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', 'apilo-settings.json');
+const RETIRED_LINE1_STATUS_IDS = new Set([225]);
 
 export const ROTATION_DAY_KEYS = [
     'monday',
@@ -409,8 +410,8 @@ export class ApiloSettingsService {
             line1: {
                 active: true,
                 sourceStatusId: 63,
-                targetStatusIds: [159, 156, 208, 225],
-                targetLimits: { 159: 2, 156: 2, 208: 2, 225: 2 },
+                targetStatusIds: [159, 156, 228],
+                targetLimits: { 159: 2, 156: 2, 228: 2 },
                 deliveryMethodPriority: [],
                 maxLargeOrderItems: 9,
                 autoSchedule: {
@@ -423,15 +424,15 @@ export class ApiloSettingsService {
                 tabRotation: {
                     enabled: false,
                     timezone: 'Europe/Warsaw',
-                    order: [159, 156, 208, 225],
-                    participantIds: [159, 156, 208, 225],
+                    order: [159, 156, 228],
+                    participantIds: [159, 156, 228],
                     cycleAnchorDate: now.slice(0, 10),
                     days: defaultRotationDays,
                     morningEnabledCount: 2,
                     disableAt: '13:00',
                     weekdaysOnly: true,
                 },
-                monthlyComputerAssignment: this.createDefaultMonthlyAssignment([159, 156, 208, 225]),
+                monthlyComputerAssignment: this.createDefaultMonthlyAssignment([159, 156, 228]),
             },
             line2: {
                 active: false,
@@ -506,7 +507,11 @@ export class ApiloSettingsService {
                 for (const [key, value] of Object.entries(rawLimits)) {
                     const keyNum = Number(key);
                     const valueNum = Number(value);
-                    if (!Number.isNaN(keyNum) && Number.isFinite(valueNum)) {
+                    if (
+                        !Number.isNaN(keyNum)
+                        && Number.isFinite(valueNum)
+                        && normalized.targetStatusIds.includes(keyNum)
+                    ) {
                         normalized.targetLimits[keyNum] = valueNum;
                     }
                 }
@@ -620,24 +625,12 @@ export class ApiloSettingsService {
             return normalized;
         };
 
-        out.line1 = normLine(out.line1, def.line1);
+        out.line1 = normLine({
+            ...out.line1,
+            targetStatusIds: this.normalizeIdList(out.line1?.targetStatusIds)
+                .filter((id) => !RETIRED_LINE1_STATUS_IDS.has(id)),
+        }, def.line1);
         out.line2 = normLine(out.line2, def.line2);
-
-        if (!out.line1.targetStatusIds.includes(225)) {
-            out.line1.targetStatusIds.push(225);
-            out.line1.targetLimits[225] = out.line1.targetLimits[225] ?? 2;
-            out.line1.monthlyComputerAssignment = this.normalizeMonthlyAssignment(
-                {
-                    ...out.line1.monthlyComputerAssignment,
-                    targetSchedules: {
-                        ...(out.line1.monthlyComputerAssignment?.targetSchedules ?? {}),
-                        225: { mode: 'always' },
-                    },
-                },
-                out.line1.targetStatusIds,
-                def.line1.monthlyComputerAssignment,
-            );
-        }
 
         return out;
     }

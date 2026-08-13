@@ -916,6 +916,7 @@ export const matrixGradeDescriptios: {
     "Klasa A": string,
     "Klasa A-(duszki)": string,
     "Klasa A-(duszki+przetarcia)": string,
+    "Klasa A-(duszki+przetarcia) kat 2": string,
     "Klasa A-(przetarcia)": string
     "Klasa A-(ryski)": string
     "Stan bardzo dobry": string
@@ -923,6 +924,7 @@ export const matrixGradeDescriptios: {
     "Klasa A": "Klasa A",
     "Klasa A-(duszki)": " Klasa A- na matrycy występują delikatne przebarwienia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(duszki+przetarcia)": " Klasa A- na matrycy występują delikatne przebarwienia i przetarcia, nie przeszkadzające w codziennej pracy",
+    "Klasa A-(duszki+przetarcia) kat 2": " Klasa A- na matrycy występują przebarwienia i przetarcia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(przetarcia)": " Klasa A- na matrycy występują delikatne przetarcia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(ryski)": " Klasa A- na matrycy występują delikatne ryski, nie przeszkadzające w codziennej pracy",
     "Stan bardzo dobry": " Stan bardzo dobry"

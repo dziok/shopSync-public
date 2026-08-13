@@ -63,6 +63,7 @@ function CategorySelection(props: AddProductProps) {
     const [deviceCode, setDeviceCode] = useState('');
     const [deviceCodeProd, setDeviceCodeProd] = useState('');
     const [accessTokenAllegro, setAccessTokenAllegro] = useState('');
+    const [loadingAllegroToken, setLoadingAllegroToken] = useState(true);
     const [error, setError] = useState('');
     const [polling, setPolling] = useState(false);
     const [params, setParams] = useState(null);
@@ -81,6 +82,42 @@ function CategorySelection(props: AddProductProps) {
 
     const [loading, setLoading] = useState(false);
     const [orders, setOrders] = useState<any[]>([]);
+
+    useEffect(() => {
+        // Jednorazowe usunięcie tokenu zapisanego przez poprzednią wersję frontendu.
+        window.localStorage.removeItem("shopsync.allegro.accessToken");
+        let cancelled = false;
+        let firstRequest = true;
+
+        const restoreAllegroToken = async () => {
+            try {
+                const response = await axios.get(`${API_URL}/auth/allegro-token-prod`, {
+                    headers: { Authorization: `Bearer ${props.authToken}` },
+                });
+                if (!cancelled) {
+                    setAccessTokenAllegro(String(response.data.access_token ?? ''));
+                }
+            } catch (error) {
+                if (!cancelled && axios.isAxiosError(error) && error.response?.status === 401) {
+                    setAccessTokenAllegro('');
+                } else if (!cancelled) {
+                    console.error("Nie udało się pobrać zapisanego tokenu Allegro:", error);
+                }
+            } finally {
+                if (!cancelled && firstRequest) {
+                    firstRequest = false;
+                    setLoadingAllegroToken(false);
+                }
+            }
+        };
+
+        void restoreAllegroToken();
+        const interval = window.setInterval(restoreAllegroToken, 10 * 60 * 1000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(interval);
+        };
+    }, [props.authToken]);
 
     const handleClick = async () => {
         setLoading(true);
@@ -268,7 +305,8 @@ function CategorySelection(props: AddProductProps) {
                     params: { device_code: deviceCodeProd },
                 });
                 if (res.data.access_token) {
-                    setAccessTokenAllegro(res.data.access_token);
+                    const token = String(res.data.access_token);
+                    setAccessTokenAllegro(token);
                     setPolling(false);
                     clearInterval(interval);
                 } else if (res.data.error === 'access_denied') {
@@ -561,7 +599,11 @@ function CategorySelection(props: AddProductProps) {
             >
                 <ApiloTokenStatus authToken={props.authToken} />
 
-                {accessTokenAllegro ? (
+                {loadingAllegroToken ? (
+                    <button style={buttonStyle()} disabled>
+                        Sprawdzanie Allegro...
+                    </button>
+                ) : accessTokenAllegro ? (
                     <button style={buttonStyle("#3c743c")} disabled>
                         Dostęp przyznany
                     </button>

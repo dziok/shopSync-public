@@ -36,6 +36,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
     "Kolor",
     "Libre Office",
     "Informacja o Windows 11",
+    "Informacja o haśle BIOS",
   ],
 
   "Procesor": [
@@ -135,8 +136,11 @@ const CATEGORY_MAP: Record<string, string[]> = {
 const norm = (s?: string) => (s ?? "").trim();
 const normKey = (s?: string) => norm(s).toLowerCase();
 const SHOPER_OPTION_PREFIX = "__shoper_option__:";
+export const MATRIX_GRADE_GHOSTS_AND_SCUFFS = "Klasa A-(duszki+przetarcia)";
+export const MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2 = `${MATRIX_GRADE_GHOSTS_AND_SCUFFS} kat 2`;
 
 const isVisualConditionAttribute = (attribute: any) => normKey(attribute?.name) === normKey("Stan wizualny");
+const isMatrixGradeAttribute = (attribute: any) => normKey(attribute?.name) === normKey("Stan matrycy");
 
 const getVisualConditionOptionLabel = (option: any, duplicateIndex: number, duplicateCount: number) => {
   const value = String(option?.value ?? "");
@@ -209,14 +213,36 @@ export const LaptopAttributeForm: React.FC<AttributeFormProps> = React.memo(({
                       selectValue: getSelectOptionValue(attribute, opt, duplicateCount),
                     };
                   });
+                  if (isMatrixGradeAttribute(attribute)) {
+                    const hasCat2Option = mappedOptions.some(
+                      (option: any) => String(option.selectValue ?? option.value ?? "") === MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2
+                    );
+                    const baseIndex = mappedOptions.findIndex(
+                      (option: any) => String(option.value ?? "") === MATRIX_GRADE_GHOSTS_AND_SCUFFS
+                    );
+                    if (!hasCat2Option && baseIndex !== -1) {
+                      mappedOptions.splice(baseIndex + 1, 0, {
+                        option_id: "__matrix_grade_ghosts_scuffs_cat_2__",
+                        value: MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2,
+                        label: MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2,
+                        selectValue: MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2,
+                      });
+                    }
+                  }
+                  const uniqueOptions = mappedOptions.filter((option: any, index: number, options: any[]) => {
+                    const value = String(option.selectValue ?? option.value ?? "");
+                    return options.findIndex((candidate: any) =>
+                      String(candidate.selectValue ?? candidate.value ?? "") === value
+                    ) === index;
+                  });
                   const optionValues = new Set(
-                    mappedOptions.map((opt: any) => String(opt.selectValue ?? ""))
+                    uniqueOptions.map((opt: any) => String(opt.selectValue ?? ""))
                   );
                   const extraOption =
                     normalizedSelected && !optionValues.has(normalizedSelected)
                       ? [{ option_id: "__custom__", value: normalizedSelected, label: normalizedSelected, selectValue: normalizedSelected }]
                       : [];
-                  return [...extraOption, ...mappedOptions];
+                  return [...extraOption, ...uniqueOptions];
                 })().map((option: any) => (
                   <MenuItem key={option.option_id} value={option.selectValue ?? ""}>
                     {option.label}

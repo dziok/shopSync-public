@@ -13,7 +13,7 @@ import { monitorCaseVC, monitorCaseVC_CZ, monitorCaseVC_SK, monitorVC, monitorVC
 import { monitorTemplateCZ } from "./templatesCZ/monitorTemplateCZ";
 import { monitorTemplateSK } from "./templatesSK/monitorTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
-import { Attribute, FormData as AllegroFormData, ProductParameter, ProductSafetyCertificateResource, ProductSafetyProducerResource, ProducersResource } from "../types";
+import { Attribute, FormData as AllegroFormData, Product, ProductParameter, ProductSafetyCertificateResource, ProductSafetyProducerResource, ProducersResource, SearchResult } from "../types";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import { handleGetProducers } from "../backendQueries/getProducers";
@@ -28,9 +28,12 @@ import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroCompone
 import { buildMonitorAllegroDescription } from "./templatesAllegro/monitorAllegroDescription";
 import type { Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
 import AllegroDescriptionEditor, { AllegroDescriptionPreview } from "./allegroComponents/AllegroDescriptionEditor";
+import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
+import { monitorParametersAllegro } from "../allegroParameters/monitorParameters";
 
-const ALLEGRO_MONITOR_CATEGORY_ID = "260";
+const ALLEGRO_MONITOR_CATEGORY_ID = "260041";
 const ALLEGRO_MONITOR_IMAGE_LIMIT = 16;
+const ALLEGRO_MONITOR_SHIPPING_RATE = "KOMPY 2018";
 
 type AddMonitorProps = {
     authToken: string,
@@ -74,6 +77,7 @@ interface IFormInput {
     productSafetyProducerId?: number | string
     productSafetyCertificateIds?: Array<number | string>
     productSafetyWarnings?: string[]
+    connectProductAllegro?: boolean
     [key: string]: any;
 }
 
@@ -103,14 +107,20 @@ function AddMonitor(props: AddMonitorProps) {
     const [pendingProducerName, setPendingProducerName] = useState<string | null>(null);
     const [updatingProduct, setUpdatingProduct] = useState<boolean>(false);
     const [relatedPackId, setRelatedPackId] = useState("");
-    const [allegroParameters, setAllegroParameters] = useState<ProductParameter[]>([]);
     const [allegroFormData, setAllegroFormData] = useState<AllegroFormData>({});
+    const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+    const [showSearchresult, setShowSearchresult] = useState(false);
+    const [searchName, setSearchName] = useState("");
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+    const [lockedParams, setLockedParams] = useState<Set<string>>(new Set());
     const [responsibleData, setResponsibleData] = useState<ResponsibleResponse>();
     const [responsibleProducerId, setResponsibleProducerId] = useState("");
     const [loadingAllegroData, setLoadingAllegroData] = useState(false);
     const [addingAllegroOffer, setAddingAllegroOffer] = useState(false);
     const [allegroTemplate, setAllegroTemplate] = useState<Template>({ sections: [] });
     const [removedAutoSections, setRemovedAutoSections] = useState<Set<string>>(new Set());
+    const monitorAllegroParameters = monitorParametersAllegro;
 
     const allAttributes = useMemo(() => {
         const byId = new Map<number, Attribute>();
@@ -172,6 +182,86 @@ function AddMonitor(props: AddMonitorProps) {
             if (value) return value;
         }
         return fallback;
+    };
+
+    const normalizeImportName = (value: unknown) =>
+        String(value ?? "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, " ")
+            .trim();
+
+    const getImportedParameterValue = (
+        parameter: ProductParameter,
+        definition?: ProductParameter,
+    ): string | string[] | null => {
+        const parameterType = definition?.type ?? parameter.type;
+        if (Array.isArray(parameter.valuesLabels) && parameter.valuesLabels.length > 0) {
+            const values = parameter.valuesLabels.map((value) => {
+                if (parameterType !== "integer" && parameterType !== "float") return String(value);
+                return String(value).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", ".") ?? "";
+            }).filter(Boolean);
+            return values.length === 1 ? values[0] : values;
+        }
+        if (Array.isArray(parameter.values) && parameter.values.length > 0) {
+            const values = parameter.values.map((value) => {
+                if (parameterType !== "integer" && parameterType !== "float") return String(value);
+                return String(value).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", ".") ?? "";
+            }).filter(Boolean);
+            return values.length === 1 ? values[0] : values;
+        }
+        if (Array.isArray(parameter.valuesIds) && parameter.valuesIds.length > 0) {
+            const dictionaryValues = parameter.valuesIds.flatMap((valueId) => {
+                const option = definition?.dictionary?.find((item) => String(item.id) === String(valueId));
+                return option ? [option.value] : [];
+            });
+            if (dictionaryValues.length > 0) {
+                return dictionaryValues.length === 1 ? dictionaryValues[0] : dictionaryValues;
+            }
+        }
+        if (parameter.rangeValue?.from || parameter.rangeValue?.to) {
+            const rangeValue = String(parameter.rangeValue.from ?? parameter.rangeValue.to ?? "");
+            if (parameterType !== "integer" && parameterType !== "float") return rangeValue;
+            return rangeValue.match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", ".") ?? "";
+        }
+        return null;
+    };
+
+    const getShoperAttributeByNames = (names: string[]) => {
+        const normalizedNames = names.map(normalizeImportName);
+        const exactMatch = allAttributes.find((attribute) =>
+            normalizedNames.includes(normalizeImportName(attribute.name))
+        );
+        if (exactMatch) return exactMatch;
+        return allAttributes.find((attribute) => {
+            const attributeName = normalizeImportName(attribute.name);
+            return normalizedNames.some((name) =>
+                attributeName.includes(name) || name.includes(attributeName)
+            );
+        });
+    };
+
+    const coerceImportedAttributeValue = (attribute: Attribute, rawValue: unknown) => {
+        const values = (Array.isArray(rawValue) ? rawValue : [rawValue])
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean);
+        const attributeType = String((attribute as any).type ?? "");
+        if (attributeType === "1") {
+            return values.some((value) => ["tak", "true", "1", "yes"].includes(normalizeImportName(value)));
+        }
+        const options = Array.isArray((attribute as any).options) ? (attribute as any).options : [];
+        if (options.length > 0 && values.length > 0) {
+            const normalizedValue = normalizeImportName(values[0]);
+            const option = options.find((item: any) => {
+                const optionValue = normalizeImportName(item?.value ?? item?.option_id);
+                return optionValue === normalizedValue
+                    || optionValue.includes(normalizedValue)
+                    || normalizedValue.includes(optionValue);
+            });
+            if (option) return option.value ?? option.option_id;
+        }
+        return values.join(", ");
     };
 
     const handleAdditionalInfoBlur = async (value: string) => {
@@ -519,6 +609,131 @@ function AddMonitor(props: AddMonitorProps) {
         }
     };
 
+    const handleSearchAllegroProduct = async () => {
+        const query = searchName.trim();
+        if (!props.accessTokenAllegro) {
+            toast.error("Brak tokenu Allegro. Zaloguj się ponownie.");
+            return;
+        }
+        if (!query) {
+            toast.info("Wpisz nazwę, EAN lub kod produktu Allegro.");
+            return;
+        }
+        try {
+            const response = await axios.get(`${API_URL}/product/search`, {
+                params: { searchName: query },
+                headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+            });
+            setSearchResult(response.data);
+            setShowSearchresult(true);
+        } catch (error) {
+            console.error("Błąd wyszukiwania monitora w Allegro:", error);
+            toast.error("Nie udało się wyszukać produktu w Allegro.");
+        }
+    };
+
+    const handleSelectAllegroMonitor = (product: Product) => {
+        const definitionsById = new Map(
+            monitorAllegroParameters.map((parameter) => [String(parameter.id), parameter]),
+        );
+        const definitionsByName = new Map(
+            monitorAllegroParameters.map((parameter) => [normalizeImportName(parameter.name), parameter]),
+        );
+        const imported: AllegroFormData = {};
+        (product.parameters ?? []).forEach((parameter) => {
+            const definition = definitionsById.get(String(parameter.id))
+                ?? definitionsByName.get(normalizeImportName(parameter.name));
+            if (!definition) return;
+            const value = getImportedParameterValue(parameter, definition);
+            if (value != null) imported[definition.name] = value;
+        });
+
+        setSelectedProductId(product.id);
+        setSelectedProduct(product);
+        setLockedParams(new Set((product.parameters ?? []).flatMap((parameter) => {
+            if (parameter.options?.identifiesProduct !== true) return [];
+            const definition = definitionsById.get(String(parameter.id))
+                ?? definitionsByName.get(normalizeImportName(parameter.name));
+            return definition ? [definition.name] : [];
+        })));
+        setAllegroFormData((previous) => ({ ...previous, ...imported }));
+        if (product.name) {
+            setValue("name", product.name, { shouldDirty: true });
+        }
+        toast.success("Wybrano produkt Allegro i pobrano jego parametry.");
+    };
+
+    const handleImportAllegroFormToShoper = () => {
+        if (allAttributes.length === 0) {
+            toast.error("Lista atrybutów Shopera nie została jeszcze pobrana.");
+            return;
+        }
+        if (!selectedProduct) {
+            toast.info("Najpierw wybierz produkt Allegro.");
+            return;
+        }
+
+        const selectedProductData: AllegroFormData = {};
+        (selectedProduct.parameters ?? []).forEach((parameter) => {
+            const definition = monitorAllegroParameters.find((item) =>
+                String(item.id) === String(parameter.id)
+                || normalizeImportName(item.name) === normalizeImportName(parameter.name)
+            );
+            const value = getImportedParameterValue(parameter, definition);
+            if (value != null) selectedProductData[definition?.name ?? parameter.name] = value;
+        });
+
+        const aliases: Record<string, string[]> = {
+            marka: ["Producent", "Marka"],
+            producent: ["Producent", "Marka"],
+            model: ["Model"],
+            "kod producenta": ["Kod producenta"],
+            stan: ["Stan"],
+            "przekatna ekranu": ["Przekątna ekranu", "Wielkość matrycy"],
+            przekatna: ["Przekątna ekranu", "Wielkość matrycy"],
+            rozdzielczosc: ["Rozdzielczość", "Rozdzielczość (px)"],
+            "rozdzielczosc px": ["Rozdzielczość", "Rozdzielczość (px)"],
+            "typ matrycy": ["Rodzaj panelu", "Typ matrycy"],
+            "rodzaj matrycy": ["Rodzaj panelu", "Typ matrycy"],
+            "rodzaj podswietlenia": ["Typ podświetlenia"],
+            "czestotliwosc odswiezania": ["Odświeżanie", "Częstotliwość odświeżania"],
+            "czas reakcji": ["Czas reakcji"],
+            jasnosc: ["Jasność"],
+            kontrast: ["Kontrast"],
+            zlacza: ["Złącza"],
+            hdr: ["HDR"],
+            pivot: ["Pivot"],
+        };
+        let importedCount = 0;
+        Object.entries(selectedProductData).forEach(([parameterName, rawValue]) => {
+            const normalizedName = normalizeImportName(parameterName);
+            const attribute = getShoperAttributeByNames(aliases[normalizedName] ?? [parameterName]);
+            if (!attribute) return;
+            const attributeId = Number(attribute.attribute_id);
+            if (!Number.isFinite(attributeId)) return;
+            const value = coerceImportedAttributeValue(attribute, rawValue);
+            if (value === "" || value == null) return;
+            setValue(`attribute_${attributeId}` as any, value, { shouldDirty: true, shouldValidate: true });
+            importedCount += 1;
+        });
+
+        const producerValue = selectedProductData["Marka"] ?? selectedProductData["Producent"];
+        const producerName = Array.isArray(producerValue) ? producerValue[0] : producerValue;
+        if (producerName) {
+            const matchingProducer = producers.find(
+                (producer) => normalizeImportName(producer.name) === normalizeImportName(producerName),
+            );
+            if (matchingProducer) {
+                setValue("producer", String(matchingProducer.producer_id), { shouldDirty: true });
+            }
+        }
+        const manufacturerCode = selectedProductData["Kod producenta"];
+        if (typeof manufacturerCode === "string" && manufacturerCode.trim()) {
+            setValue("SKU", manufacturerCode.trim(), { shouldDirty: true });
+        }
+        toast.success(`Zaimportowano ${importedCount} pól z Allegro do formularza monitora.`);
+    };
+
     useEffect(() => {
         handleGetProductSafetyProducers({
             API_URL,
@@ -536,7 +751,6 @@ function AddMonitor(props: AddMonitorProps) {
 
     useEffect(() => {
         if (!props.accessTokenAllegro) {
-            setAllegroParameters([]);
             setResponsibleData(undefined);
             return;
         }
@@ -545,26 +759,15 @@ function AddMonitor(props: AddMonitorProps) {
         const loadAllegroData = async () => {
             setLoadingAllegroData(true);
             try {
-                const [parametersResponse, producersResponse] = await Promise.all([
-                    axios.get(`${API_URL}/product/category-parameters`, {
-                        headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
-                        params: { categoryId: ALLEGRO_MONITOR_CATEGORY_ID },
-                    }),
-                    axios.get(`${API_URL}/product/responsibleProducers`, {
-                        headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
-                    }),
-                ]);
+                const producersResponse = await axios.get(`${API_URL}/product/responsibleProducers`, {
+                    headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+                });
                 if (cancelled) return;
-                setAllegroParameters(
-                    Array.isArray(parametersResponse.data?.parameters)
-                        ? parametersResponse.data.parameters
-                        : [],
-                );
                 setResponsibleData(producersResponse.data);
             } catch (error) {
                 if (!cancelled) {
                     console.error("Błąd pobierania danych Allegro dla monitorów:", error);
-                    toast.error("Nie udało się pobrać parametrów monitorów z Allegro.");
+                    toast.error("Nie udało się pobrać producentów odpowiedzialnych z Allegro.");
                 }
             } finally {
                 if (!cancelled) setLoadingAllegroData(false);
@@ -999,6 +1202,7 @@ function AddMonitor(props: AddMonitorProps) {
     let pivot = getAttrValueByNames(["Pivot"], String(watch("pivot", "") ?? ""));
     let additionalInfo = getAttrValueByNames(["Uwagi", "Uwaga", "Dodatkowa informacja", "Dodatkowa informacja - 1"], String(watch("additionalInfo", "") ?? ""));
     let descriptionLanguage = String(watch("descriptionLanguage", "description") ?? "description")
+    const connectProductAllegro = Boolean(watch("connectProductAllegro", true));
     let visualCondition_CZ = ""
     let visualCondition_SK = ""
 
@@ -1069,14 +1273,14 @@ function AddMonitor(props: AddMonitorProps) {
     const selectedProducerName =
         producers.find((item) => String(item.producer_id) === String(producer))?.name ?? "";
     const allegroProducerName = producent || selectedProducerName;
-    const allegroTitleValue = String(watch("allegroTitle", "") || name).trim();
+    const offerTitleValue = name.trim();
     const frameForAllegro = Boolean(watch("frame", false));
     const designForAllegro = Boolean(watch("design", false));
     const automaticAllegroDescription = useMemo(
         () => buildMonitorAllegroDescription({
             producer: allegroProducerName,
             model,
-            name: allegroTitleValue,
+            name: offerTitleValue,
             visualCondition,
             caseCondition: chasingCondition,
             stand,
@@ -1097,7 +1301,7 @@ function AddMonitor(props: AddMonitorProps) {
         [
             allegroProducerName,
             model,
-            allegroTitleValue,
+            offerTitleValue,
             visualCondition,
             chasingCondition,
             stand,
@@ -1149,12 +1353,24 @@ function AddMonitor(props: AddMonitorProps) {
             freshById.forEach((section) => {
                 if (!removedAutoSections.has(section.id)) sections.push(section);
             });
+
+            const ecoIndex = sections.findIndex(
+                (section) => section.origin !== "user" && section.id === "eco",
+            );
+            if (ecoIndex !== -1) {
+                const [ecoSection] = sections.splice(ecoIndex, 1);
+                let lastAutomaticIndex = -1;
+                sections.forEach((section, index) => {
+                    if (section.origin !== "user") lastAutomaticIndex = index;
+                });
+                sections.splice(lastAutomaticIndex + 1, 0, ecoSection);
+            }
             return { sections };
         });
     }, [automaticAllegroDescription, removedAutoSections]);
 
     useEffect(() => {
-        if (!allegroParameters.length) return;
+        if (!monitorAllegroParameters.length) return;
 
         const normalizeValue = (value: unknown) =>
             String(value ?? "")
@@ -1219,7 +1435,7 @@ function AddMonitor(props: AddMonitorProps) {
 
         setAllegroFormData((previous) => {
             const next = { ...previous };
-            allegroParameters.forEach((parameter) => {
+            monitorAllegroParameters.forEach((parameter) => {
                 const existing = next[parameter.name];
                 if (Array.isArray(existing) ? existing.length > 0 : String(existing ?? "").trim()) return;
                 const normalizedName = normalizeValue(parameter.name);
@@ -1230,7 +1446,7 @@ function AddMonitor(props: AddMonitorProps) {
             return next;
         });
     }, [
-        allegroParameters,
+        monitorAllegroParameters,
         allegroProducerName,
         model,
         diagonal,
@@ -1261,7 +1477,7 @@ function AddMonitor(props: AddMonitorProps) {
             return;
         }
 
-        const missingRequired = allegroParameters
+        const missingRequired = monitorAllegroParameters
             .filter((parameter) => parameter.required)
             .filter((parameter) => {
                 const value = allegroFormData[parameter.name];
@@ -1273,8 +1489,8 @@ function AddMonitor(props: AddMonitorProps) {
             return;
         }
 
-        const title = String(getValues("allegroTitle") || name).trim();
-        const price = Number(getValues("allegroPrice") ?? getValues("price"));
+        const title = name.trim();
+        const price = Number(getValues("price"));
         const stock = Number(getValues("stock"));
         if (!title || title.length > 75) {
             toast.error("Tytuł Allegro musi mieć od 1 do 75 znaków.");
@@ -1328,21 +1544,20 @@ function AddMonitor(props: AddMonitorProps) {
         const productParameters = buildOfferParameters(
             allegroFormData,
             true,
-            allegroParameters,
+            monitorAllegroParameters,
         );
         const offerParameters = buildOfferParameters(
             allegroFormData,
             false,
-            allegroParameters,
+            monitorAllegroParameters,
         );
-        const shippingRateName = String(
-            getValues("allegroShippingRate") || "MONITORY",
-        ).trim();
-
         const productData = {
             name: title,
             productSet: [{
                 product: {
+                    ...(connectProductAllegro && selectedProductId
+                        ? { id: selectedProductId, idType: "GTIN" }
+                        : {}),
                     name: title,
                     category: { id: ALLEGRO_MONITOR_CATEGORY_ID },
                     parameters: productParameters,
@@ -1366,7 +1581,7 @@ function AddMonitor(props: AddMonitorProps) {
             ...(offerParameters.length ? { parameters: offerParameters } : {}),
             external: { id: String(getValues("SKU") ?? "").trim() },
             delivery: {
-                shippingRates: { name: shippingRateName },
+                shippingRates: { name: ALLEGRO_MONITOR_SHIPPING_RATE },
             },
             afterSalesServices: {
                 impliedWarranty: { name: "Standardowe" },
@@ -1566,6 +1781,48 @@ function AddMonitor(props: AddMonitorProps) {
 
                                 </Select>
                             </FormControl>
+                            <Box sx={{ borderRadius: 1, boxShadow: 1, p: 2, backgroundColor: "rgb(55, 61, 77)" }}>
+                                <FormControlLabel
+                                    control={<Checkbox defaultChecked {...register("connectProductAllegro")} />}
+                                    label="Połącz z produktem Allegro"
+                                />
+                                <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+                                    <TextField
+                                        variant="filled"
+                                        size="small"
+                                        value={searchName}
+                                        onChange={(event) => setSearchName(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                void handleSearchAllegroProduct();
+                                            }
+                                        }}
+                                        placeholder="Wyszukaj produkt Allegro"
+                                        fullWidth
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="contained"
+                                        onClick={handleSearchAllegroProduct}
+                                        disabled={!props.accessTokenAllegro}
+                                    >
+                                        Szukaj
+                                    </Button>
+                                </Box>
+                                <Button
+                                    type="button"
+                                    sx={{ mt: 2, fontSize: "15px" }}
+                                    onClick={handleImportAllegroFormToShoper}
+                                >
+                                    Importuj dane z Allegro
+                                </Button>
+                                {selectedProductId ? (
+                                    <Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.8 }}>
+                                        Wybrany produkt: {selectedProductId}
+                                    </Typography>
+                                ) : null}
+                            </Box>
                             <h2>Dodaj monitor</h2>
                             <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
                             <TextField label="Tytuł" type="text"{...register("name", {
@@ -1783,24 +2040,6 @@ function AddMonitor(props: AddMonitorProps) {
                                 ) : null}
 
                                 <Stack spacing={2}>
-                                    <TextField
-                                        label="Tytuł Allegro"
-                                        inputProps={{ maxLength: 75 }}
-                                        InputLabelProps={{ shrink: true }}
-                                        {...register("allegroTitle")}
-                                    />
-                                    <TextField
-                                        label="Cena Allegro"
-                                        type="number"
-                                        InputLabelProps={{ shrink: true }}
-                                        {...register("allegroPrice", { valueAsNumber: true })}
-                                    />
-                                    <TextField
-                                        label="Nazwa cennika dostawy Allegro"
-                                        defaultValue="MONITORY"
-                                        InputLabelProps={{ shrink: true }}
-                                        {...register("allegroShippingRate")}
-                                    />
                                     <ResponsibleProducerSelect
                                         data={responsibleData}
                                         value={responsibleProducerId}
@@ -1815,7 +2054,7 @@ function AddMonitor(props: AddMonitorProps) {
                                     </Stack>
                                 ) : (
                                     <AllegroMonitorParameters
-                                        Parameters={allegroParameters}
+                                        Parameters={monitorAllegroParameters}
                                         formData={allegroFormData}
                                         register={register}
                                         handleChangeAllegro={(parameterName, value) => {
@@ -1824,7 +2063,9 @@ function AddMonitor(props: AddMonitorProps) {
                                                 [parameterName]: value,
                                             }));
                                         }}
-                                        isParamDisabled={() => false}
+                                        isParamDisabled={(parameterName) =>
+                                            connectProductAllegro && lockedParams.has(parameterName)
+                                        }
                                     />
                                 )}
 
@@ -1908,6 +2149,14 @@ function AddMonitor(props: AddMonitorProps) {
                     )}
                 </div>
             </div>
+
+            <AllegroSearchResults
+                showSearchresult={showSearchresult}
+                searchResult={searchResult}
+                selectedProductId={selectedProductId}
+                setShowSearchresult={setShowSearchresult}
+                handleSelectAllegroProduct={handleSelectAllegroMonitor}
+            />
 
         </>
     );

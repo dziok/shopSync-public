@@ -73,6 +73,7 @@ export interface IFormInput {
     category: string,
     producer: number,
     showWin11info: boolean
+    showBiosPasswordInfo: boolean
     connectProductAllegro: boolean,
     allegroTitle?: string,
     allegroPrice?: number,

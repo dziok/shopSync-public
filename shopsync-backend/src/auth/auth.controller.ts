@@ -41,4 +41,12 @@ export class AuthController {
   async pollAccessToken_prod(@Query("device_code") deviceCodeProd: string) {
     return this.authService.pollAccessTokenProd(deviceCodeProd);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("allegro-token-prod")
+  async getSavedAllegroAccessToken() {
+    return {
+      access_token: await this.authService.getAllegroProdAccessToken(),
+    };
+  }
 }

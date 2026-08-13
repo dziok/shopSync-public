@@ -16,6 +16,7 @@ export const getConfig = () => ({
   allegroSandboxClientSecret: process.env.ALLEGRO_SANDBOX_CLIENT_SECRET,
   allegroProdClientId: process.env.ALLEGRO_PROD_CLIENT_ID,
   allegroProdClientSecret: process.env.ALLEGRO_PROD_CLIENT_SECRET,
+  allegroTokenFile: process.env.ALLEGRO_TOKEN_FILE,
   shoperRestBaseUrl: process.env.SHOPER_REST_BASE_URL,
   shoperStorefrontBaseUrl: process.env.SHOPER_STOREFRONT_BASE_URL,
   apiloBaseUrl: process.env.APILO_BASE_URL,

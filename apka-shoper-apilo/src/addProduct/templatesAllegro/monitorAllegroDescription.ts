@@ -200,12 +200,10 @@ export const buildMonitorAllegroDescription = (
     : "";
   const connectorItems = splitConnectors(input.connectors);
   const featureItems = [
+    input.additionalInfo && `<li><b>${escapeHtml(input.additionalInfo)}</b></li>`,
     isWithoutStand(input.stand) && "<li><b>Monitor sprzedawany bez nogi!</b></li>",
     visualConditionKey && `<li>Stan matrycy: <b>${escapeHtml(visualConditionKey)}</b>${visualConditionDescription ? ` (${escapeHtml(visualConditionDescription)})` : ""}</li>`,
     caseConditionKey && `<li>Stan obudowy: <b>${escapeHtml(caseConditionKey)}</b>${caseConditionDescription ? ` (${escapeHtml(caseConditionDescription)})` : ""}</li>`,
-    input.frame && "<li>Ultra cienka ramka matrycy</li>",
-    input.design && "<li>Nowoczesny design</li>",
-    input.additionalInfo && `<li>${escapeHtml(input.additionalInfo)}</li>`,
     "<li>Kabel zasilający w komplecie</li>",
   ].filter(Boolean).join("");
 

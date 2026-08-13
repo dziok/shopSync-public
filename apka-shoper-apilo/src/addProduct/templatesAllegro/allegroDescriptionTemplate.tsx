@@ -12,6 +12,8 @@ export type Template = {
     sections: TemplateSection[];
 };
 
+export const ALLEGRO_LAPTOP_TEMPLATE_REVISION = "2026-08-10-matrix-grade-cat-2";
+
 const clean = (value: unknown) => String(value ?? "").trim();
 
 const formatCapacity = (value: unknown) => {
@@ -105,6 +107,7 @@ export function AllegroLaptopTemplate({
     touchScreen,
     showModem,
     showWin11info,
+    showBiosPasswordInfo,
     producer,
     model,
     ports,
@@ -144,6 +147,7 @@ export function AllegroLaptopTemplate({
     touchScreen: string;
     showModem: boolean;
     showWin11info: boolean;
+    showBiosPasswordInfo: boolean;
     producer: string;
     model: string;
     ports: string[];
@@ -159,6 +163,7 @@ export function AllegroLaptopTemplate({
     const seriesText = series?.trim();
     const displayName = [producer, model].filter(Boolean).join(" ").trim();
     const cpuTurbo = formatGHz(cpuMaxClockSpeed) || formatGHz(cpuClockSpeed);
+    const cpuTurboFeature = cpuTurbo ? ` | ${cpuTurbo} TURBO` : "";
     const ramLabel = formatCapacity(ramAmount);
     const diskLabel = formatCapacity(diskSize);
     const diskTypeLabel = cleanDiskType(diskType) || clean(diskType);
@@ -215,7 +220,7 @@ export function AllegroLaptopTemplate({
             <h1>${displayName}</h1>
             <h2>Cechy:</h2>
 
-            <p>✅ ${cpuThreads}-wątkowy procesor <b>${cpuModel} | ${cpuCores} x ${cpuTurbo}</b> gwarantujący niesamowitą wydajność i szybkość</p>
+            <p>✅ ${cpuThreads}-wątkowy procesor <b>${cpuModel}${cpuTurboFeature}</b> gwarantujący niesamowitą wydajność i szybkość</p>
             <p>✅ Szybki dysk <b>${diskTypeLabel}</b> o pojemności <b>${diskSize}</b>, zapewniający błyskawiczny dostęp do danych</p>
             <p>✅ Pamięć RAM <b>${ramType}</b> o pojemności <b>${ramLabel}</b> zapewniająca niezrównaną płynność działania i możliwość wykonywania jednocześnie wielu zadań</p>
             ${!hasNoSystem
@@ -530,6 +535,20 @@ export function AllegroLaptopTemplate({
                         type: "TEXT",
                         content:
                             '<p>Laptop został wydany wcześniej niż Windows 11, dlatego ten system <b>nie jest oficjalnie wspierany przez producenta</b> (producent wspiera tylko najnowszy sprzęt), jednak <b>laptop jest w pełni kompatybilny z tym systemem</b> i posiada wymagane do poprawnego działania szyfrowanie TPM 2.0 oraz UEFI. <b>Działa bez żadnych problemów</b>, umożliwiając pobieranie najnowszych sterowników oraz aktualizacji systemu. Chcesz laptopa z zainstalowanym systemem Windows 10? Nie ma problemu, napisz w "uwagach do sprzedającego" podczas składania zamówienia.</p>',
+                    },
+                ],
+            }
+            : null,
+
+        showBiosPasswordInfo
+            ? {
+                id: "biosPasswordInfo",
+                origin: "auto",
+                items: [
+                    {
+                        type: "TEXT",
+                        content:
+                            '<h2>UWAGA!</h2><p>Laptop sprzedawany jest z hasłem BIOS. Nie wpływa to w żaden sposób na codzienne użytkowanie urządzenia - system działa normalnie, laptop jest w pełni sprawny i gotowy do pracy. Hasło dotyczy jedynie ustawień BIOS, z których przeciętny użytkownik praktycznie nie korzysta. Dla większości osób nie ma to żadnego znaczenia podczas normalnego użytkowania laptopa.</p>',
                     },
                 ],
             }

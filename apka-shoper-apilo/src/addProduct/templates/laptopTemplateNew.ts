@@ -22,7 +22,8 @@ export const LaptopTemplateNew = (
     additionalInfo_matrix: string,
     touchScreen: string,
     showModem: boolean,
-    showWin11info: boolean
+    showWin11info: boolean,
+    showBiosPasswordInfo: boolean
 
 ) => `
    
@@ -356,6 +357,14 @@ export const LaptopTemplateNew = (
                 i posiada wymagane do poprawnego działania szyfrowanie TPM 2.0 oraz UEFI. <b>Działa bez żadnych problemów</b>,
                 umożliwiając pobieranie najnowszych sterowników oraz aktualizacji systemu. 
                 Chcesz laptopa z zainstalowanym systemem Windows 10? Nie ma problemu, napisz w "uwagach do sprzedającego" podczas składania zamówienia.
+            </p>
+        </div>
+    ` : ''}
+
+    ${showBiosPasswordInfo ? `
+        <div class="laptop_biosInfo">
+            <p class="laptop_p">
+                <b>UWAGA!</b> Laptop sprzedawany jest z hasłem BIOS. Nie wpływa to w żaden sposób na codzienne użytkowanie urządzenia - system działa normalnie, laptop jest w pełni sprawny i gotowy do pracy. Hasło dotyczy jedynie ustawień BIOS, z których przeciętny użytkownik praktycznie nie korzysta. Dla większości osób nie ma to żadnego znaczenia podczas normalnego użytkowania laptopa.
             </p>
         </div>
     ` : ''}
@@ -859,6 +868,14 @@ export const LaptopTemplateNew = (
             background-color: #fff3f0;
         }
 
+        .laptop_biosInfo {
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 24px;
+            text-align: justify;
+            background-color: #fbf8e5;
+        }
+
         /* Media Queries */
         @media (max-width: 840px) {
 
@@ -928,6 +945,7 @@ export const matrixGradeDescriptios: {
     "Klasa A": string,
     "Klasa A-(duszki)": string,
     "Klasa A-(duszki+przetarcia)": string,
+    "Klasa A-(duszki+przetarcia) kat 2": string,
     "Klasa A-(przetarcia)": string
     "Klasa A-(ryski)": string
     "Stan bardzo dobry": string
@@ -935,6 +953,7 @@ export const matrixGradeDescriptios: {
     "Klasa A": "Klasa A",
     "Klasa A-(duszki)": " Klasa A- na matrycy występują delikatne przebarwienia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(duszki+przetarcia)": " Klasa A- na matrycy występują delikatne przebarwienia i przetarcia, nie przeszkadzające w codziennej pracy",
+    "Klasa A-(duszki+przetarcia) kat 2": " Klasa A- na matrycy występują przebarwienia i przetarcia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(przetarcia)": " Klasa A- na matrycy występują delikatne przetarcia, nie przeszkadzające w codziennej pracy",
     "Klasa A-(ryski)": " Klasa A- na matrycy występują delikatne ryski, nie przeszkadzające w codziennej pracy",
     "Stan bardzo dobry": " Stan bardzo dobry"
