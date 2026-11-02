@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './addProducts.css';
-import { apiloSystemType, cpuTypesDescriptions, cpuTypesDescriptionsCZ, cpuTypesDescriptionsSK, desktopStatus, desktopStatusCZ, desktopStatusSK, diskTypesDescriptions, diskTypesDescriptionsCZ, diskTypesDescriptionsSK, ramTypesDescriptions, ramTypesDescriptionsCZ, ramTypesDescriptionsSK, systemType, systemTypeCZ, systemTypeSK } from "./additionalDescriptions/pcAdditionalDescription";
+import { apiloSystemType, getCpuTypeDescription, homeAssistantSupportNotice, desktopStatus, desktopStatusCZ, desktopStatusSK, diskTypesDescriptions, diskTypesDescriptionsCZ, diskTypesDescriptionsSK, ramTypesDescriptions, ramTypesDescriptionsCZ, ramTypesDescriptionsSK, systemType, systemTypeCZ, systemTypeSK } from "./additionalDescriptions/pcAdditionalDescription";
 import { TextField, Button, Checkbox, FormControlLabel, FormControl, InputLabel, Select, MenuItem, Box, ThemeProvider, Typography, TextareaAutosize, SelectChangeEvent, ListItemText, Autocomplete, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton } from '@mui/material';
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
@@ -13,6 +13,7 @@ import { additionalTranslationsCZ, additionalTranslationsPL, additionalTranslati
 import { pcTemplateCZ } from "./templatesCZ/pcTemplateCZ";
 import { pcTemplateSK } from "./templatesSK/pcTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
+import { findAdditionalFeaturesAttribute, isAdditionalFeaturesName, readAdditionalFeaturesFromDescription, renderAdditionalFeatureItems, resolveImportedAdditionalFeatures, splitAdditionalFeatures, translateAdditionalFeatures } from "./additionalFeatures";
 import { AddImageApilo } from "../backendQueries/addImageApilo";
 import { AddProductShoper } from "../backendQueries/addProductShoper";
 import { AddProductApilo } from "../backendQueries/addProductApilo";
@@ -21,6 +22,10 @@ import { AddImageShoper } from "../backendQueries/addImageShoper";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { Product, SearchResult, FormData, FormDataAllegro, ProducersResource, ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { buildOfferParameters } from "./allegroComponents/buildOfferParameters";
+import { resolveImportedShoperAttribute, resolveShoperSelectValue } from "./allegroComponents/importShoperAttribute";
+import { ShoperImportedFieldStyles, shoperFieldWasProvided, shoperImportedAttributeNames, useShoperImportedFields } from "./shoperImportedFields";
+import { readShoperProductAttributes } from "./shoperImportedValues";
+import { createPcPortGroups } from "./pcPortGroups";
 import AllegroProductSearch from "./allegroComponents/searchProductAllegro";
 import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
 import { handleSelectAllegroProduct as handleSelectAllegroProductUtil } from "./allegroComponents/selectAllegroProduct";
@@ -36,10 +41,13 @@ import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroCompone
 import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
 import { buildWirelessCommunicationSection } from "./templatesAllegro/wirelessCommunicationSection";
+import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 type AddProductProps = {
     authToken: string
     accessTokenAllegro: string
+    allegroAccountId?: string
 }
 export type ApiloResponse = {
     products: {
@@ -126,8 +134,9 @@ const getCaseDescriptionForType = (caseType: string) =>
         ? "Mała, kompaktowa obudowa"
         : " Łatwa w rozbudowie, pojemna obudowa ";
 function AddPC(props: AddProductProps) {
-    const { register, handleSubmit, watch, setValue, control, getValues } = useForm<IFormInput>()
+    const { register, handleSubmit, watch, setValue, control, getValues, reset } = useForm<IFormInput>()
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const [addToApilo, setAddToApilo] = useState(true);
     const [imageSrc, setImageSrc] = useState<string>("");
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
@@ -135,6 +144,9 @@ function AddPC(props: AddProductProps) {
     const [IncludeSK, setIncludeSK] = useState("");
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
     const [additionalInfoSK, setAdditionalInfoSK] = useState("");
+    const [extraFeaturesCZ, setExtraFeaturesCZ] = useState("");
+    const [extraFeaturesSK, setExtraFeaturesSK] = useState("");
+    const [pendingImportedExtraFeatures, setPendingImportedExtraFeatures] = useState<{ text: string; entries: Array<[number, unknown]> } | null>(null);
     const [gpuDescriptionsCZ, setGpuDescriptionsCZ] = useState("");
     const [gpuDescriptionsSK, setGpuDescriptionsSK] = useState("");
     const [imageLinks, setImageLinks] = useState<string[]>([]);
@@ -149,10 +161,13 @@ function AddPC(props: AddProductProps) {
     const [shoperOfferId, setShoperOfferId] = useState("");
     const [loadingShoperOffer, setLoadingShoperOffer] = useState(false);
     const [pendingShoperAttributes, setPendingShoperAttributes] = useState<Array<[number, unknown]> | null>(null);
+    const { importedFields, clearImportedFields, markImportedFields, onImportedFieldChange } = useShoperImportedFields();
     const [gaugeId, setGaugeId] = useState<number>(6);
     const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const lastUploadKeyRef = useRef<string>("");
+    const pauseDescriptionGenerationRef = useRef(false);
+    const resetRevisionRef = useRef(0);
     const [isImageManagerOpen, setIsImageManagerOpen] = useState(false);
 
     ////////////// Allegro ////////////////
@@ -224,7 +239,11 @@ function AddPC(props: AddProductProps) {
         }
         try {
             const response = await axios.get(`${API_URL}/product/responsibleProducers`, {
-                headers: { Authorization: `Bearer ${props.accessTokenAllegro}` }, // może być też 'authorization'
+                params: { allegroAccountId: props.allegroAccountId },
+                headers: {
+                    Authorization: `Bearer ${props.authToken}`,
+                    "Cache-Control": "no-cache",
+                },
             });
             setResponsibleData(response.data);
             // jeżeli chcesz podgląd aktualnych danych, loguj 'response.data', nie state
@@ -253,65 +272,6 @@ function AddPC(props: AddProductProps) {
             return ["1", "true", "tak", "yes", "on"].includes(normalized);
         }
         return false;
-    };
-
-    const resolveSelectValue = (attr: Attribute, value: unknown): string => {
-        if (value == null) return "";
-        if (Array.isArray(value)) {
-            if (value.length === 0) return "";
-            return resolveSelectValue(attr, value[0]);
-        }
-        if (typeof value === "object") {
-            const candidate = value as { value?: unknown; option_id?: unknown; optionId?: unknown };
-            if (candidate.value != null) return String(candidate.value);
-            const optionId = candidate.option_id ?? candidate.optionId;
-            if (optionId != null) {
-                const option = attr.options?.find((opt) => String(opt.option_id) === String(optionId));
-                if (option?.value != null) return String(option.value);
-            }
-        }
-        const asString = String(value);
-        const normalize = (input: string) =>
-            input
-                .toLowerCase()
-                .replace(/\s+/g, "")
-                .replace(/,/g, ".")
-                .replace(/[^a-z0-9.]/g, "");
-        const toNumber = (input: string) => {
-            const normalized = normalize(input);
-            const numeric = normalized.replace(/[^0-9.]/g, "");
-            if (!numeric) return null;
-            const parsed = Number(numeric);
-            return Number.isFinite(parsed) ? parsed : null;
-        };
-
-        const optionById = attr.options?.find((opt) => String(opt.option_id) === asString);
-        if (optionById?.value != null) return String(optionById.value);
-        const optionByValue = attr.options?.find((opt) => String(opt.value) === asString);
-        if (optionByValue?.value != null) return String(optionByValue.value);
-
-        const normalizedValue = normalize(asString);
-        const numericValue = toNumber(asString);
-        const optionByNormalized = attr.options?.find(
-            (opt) => normalize(String(opt.value ?? "")) === normalizedValue
-        );
-        if (optionByNormalized?.value != null) return String(optionByNormalized.value);
-
-        if (numericValue != null) {
-            const optionByNumber = attr.options?.find((opt) => {
-                const optionNumber = toNumber(String(opt.value ?? ""));
-                return optionNumber != null && optionNumber === numericValue;
-            });
-            if (optionByNumber?.value != null) return String(optionByNumber.value);
-        }
-
-        const optionByContains = attr.options?.find((opt) => {
-            const optValue = normalize(String(opt.value ?? ""));
-            return optValue.includes(normalizedValue) || normalizedValue.includes(optValue);
-        });
-        if (optionByContains?.value != null) return String(optionByContains.value);
-
-        return asString;
     };
 
     const applyAttributeEntriesToForm = (
@@ -344,8 +304,8 @@ function AddPC(props: AddProductProps) {
                 setValue(`attribute_${id}`, coerceToBoolean(value), { shouldValidate: true, shouldDirty: true });
                 return;
             }
-            if (attr.type === "2") {
-                setValue(`attribute_${id}`, resolveSelectValue(attr, value), { shouldValidate: true, shouldDirty: true });
+            if (String(attr.type) === "2") {
+                setValue(`attribute_${id}`, resolveShoperSelectValue(attr, value) ?? "", { shouldValidate: true, shouldDirty: true });
                 return;
             }
             setValue(`attribute_${id}`, coerceToString(value), { shouldValidate: true, shouldDirty: true });
@@ -421,6 +381,8 @@ function AddPC(props: AddProductProps) {
         }
 
         setLoadingShoperOffer(true);
+        pauseDescriptionGenerationRef.current = false;
+        clearImportedFields();
         try {
             const response = await axios.get(`${API_URL}/product/${offerId}`, {
                 headers: {
@@ -438,6 +400,7 @@ function AddPC(props: AddProductProps) {
 
             if (pl.name) setValue("name", pl.name, { shouldValidate: true, shouldDirty: true });
             if (pl.description) setValue("description", pl.description, { shouldValidate: true, shouldDirty: true });
+            const importedExtraFeatures = readAdditionalFeaturesFromDescription(pl.description, ".pc_extra_features");
             if (pl.active != null) setValue("active", coerceToBoolean(pl.active), { shouldValidate: true, shouldDirty: true });
             if (product?.active != null) setValue("active", coerceToBoolean(product.active), { shouldValidate: true, shouldDirty: true });
 
@@ -479,38 +442,7 @@ function AddPC(props: AddProductProps) {
                     attributeGroupId: "47",
                 });
             const attributeMap = new Map(attrsForMap.map((attr) => [attr.attribute_id, attr]));
-            const rawAttributes = product?.attributes ?? product?.attribute ?? [];
-            const attributeEntries: Array<[number, unknown]> = [];
-
-            if (Array.isArray(rawAttributes)) {
-                rawAttributes.forEach((attr) => {
-                    const id = Number(attr.attribute_id ?? attr.attributeId ?? attr.id);
-                    const value = attr.value ?? attr.values ?? attr.value_id ?? attr.valueId ?? attr;
-                    if (Number.isFinite(id)) {
-                        attributeEntries.push([id, value]);
-                    }
-                });
-            } else if (rawAttributes && typeof rawAttributes === "object") {
-                Object.entries(rawAttributes).forEach(([maybeGroupId, groupValue]) => {
-                    if (groupValue && typeof groupValue === "object" && !Array.isArray(groupValue)) {
-                        Object.entries(groupValue).forEach(([id, value]) => {
-                            const numericId = Number(id);
-                            if (Number.isFinite(numericId)) {
-                                attributeEntries.push([numericId, value]);
-                            }
-                        });
-                        return;
-                    }
-                    const numericId = Number(maybeGroupId);
-                    if (Number.isFinite(numericId)) {
-                        attributeEntries.push([numericId, groupValue]);
-                    }
-                });
-            }
-
-            const groupIds = rawAttributes && typeof rawAttributes === "object" && !Array.isArray(rawAttributes)
-                ? Object.keys(rawAttributes).map((id) => Number(id)).filter((id) => Number.isFinite(id))
-                : [];
+            const { entries: attributeEntries, groupIds } = readShoperProductAttributes(product?.attributes ?? product?.attribute ?? []);
             const extraGroupIds = groupIds.filter((id) => id && id !== 47);
             if (extraGroupIds.length > 0) {
                 const extraAttributes = (await Promise.all(
@@ -524,6 +456,19 @@ function AddPC(props: AddProductProps) {
             } else {
                 applyAttributeEntriesToForm(attributeEntries, attributeMap);
             }
+            setPendingImportedExtraFeatures({ text: importedExtraFeatures, entries: attributeEntries });
+
+            const imported = shoperImportedAttributeNames(attributeEntries);
+            if (shoperFieldWasProvided(pl.name)) imported.push("name");
+            if (shoperFieldWasProvided(pl.description)) imported.push("description");
+            if (shoperFieldWasProvided(pl.active) || shoperFieldWasProvided(product?.active)) imported.push("active");
+            if (shoperFieldWasProvided(cs.description)) imported.push("descriptionCZ");
+            if (shoperFieldWasProvided(sk.description)) imported.push("descriptionSK");
+            if (shoperFieldWasProvided(product?.code)) imported.push("SKU");
+            if (product?.producer_id) imported.push("producer");
+            if (shoperFieldWasProvided(product?.stock?.price)) imported.push("price");
+            if (shoperFieldWasProvided(product?.stock?.stock)) imported.push("stock");
+            markImportedFields(imported);
 
             toast.success("Dane aukcji z Shopera zostały pobrane.");
         } catch (error) {
@@ -544,6 +489,7 @@ function AddPC(props: AddProductProps) {
         const localGaugeId = getGaugeIdForCaseType(shoper_caseType);
         const token = props.accessTokenAllegro
         const currentName = String(getValues("name") ?? name ?? "").trim();
+        const extraFeatureItems = renderAdditionalFeatureItems(extraFeatures);
         const allegroSystem = String(formData["System operacyjny"] ?? "");
         const shoperSystemValue = String(shoper_system ?? "").trim();
         const normalizedShoperSystem = shoperSystemValue.toLowerCase();
@@ -598,7 +544,8 @@ function AddPC(props: AddProductProps) {
                                 <li>Powiadomienia (np. alerty, statusy urządzeń)</li>
                                 <li>Wsparcie dla asystentów głosowych (Google Assistant, Alexa)</li>
                                 </ul>
-                                <p>System ✅ <b>zainstalowany i gotowy do dalszej konfiguracji</b> po podłączeniu!</p>`
+                                <p>System ✅ <b>zainstalowany i gotowy do dalszej konfiguracji</b> po podłączeniu!</p>
+                                ${homeAssistantSupportNotice}`
                         : isResolvedWindows10
                             ? `<h2>${resolvedSystem}</h2>
                                 <p>Windows 10 to system operacyjny firmy Microsoft, wydany w lipcu 2015 roku, który łączy w sobie najlepsze cechy wcześniejszych wersji Windows 7 i Windows 8. Oferuje znajomy interfejs z menu Start, wsparcie dla aplikacji uniwersalnych, asystenta głosowego Cortana. ❗UWAGA❗ Po 14 października 2025 r. firma Microsoft nie będzie już zapewniać standardowego wsparcia dla systemu Windows 10. Twój komputer będzie nadal działał, a Ty możesz kwalifikować się do subskrypcji rozszerzonych aktualizacji zabezpieczeń (ESU) firmy Microsoft. ESU zapewnia ograniczone krytyczne aktualizacje, patrz https://www.microsoft.com/windows/end-of-support.</p>
@@ -798,7 +745,7 @@ function AddPC(props: AddProductProps) {
                         "url": imageLinks[0]
                     }, {
                         "type": "TEXT",
-                        "content": `<h1>⚙️ Parametry techniczne:</h1><ul><li><b>❗${additionalInfo}</b></li></ul> ${apiloSpec} ${formData['Typ obudowy'] == 'All in One' ? apiloSpecAio : ''}<p><b>✅ Stacjonarny komputer poleasingowy w bardzo dobrym stanie</b><b> technicznym, dokładnie przetestowany przed wysyłką i gotowy do pracy</b></p>`
+                        "content": `<h1>⚙️ Parametry techniczne:</h1><ul><li><b>❗${additionalInfo}</b></li></ul> ${apiloSpec} ${shoper_caseType === 'All in One' ? apiloSpecAio : ''}<p><b>✅ Stacjonarny komputer poleasingowy w bardzo dobrym stanie</b><b> technicznym, dokładnie przetestowany przed wysyłką i gotowy do pracy</b></p>`
                     }]
                 }, {
                     "items": [{
@@ -808,7 +755,7 @@ function AddPC(props: AddProductProps) {
                         ${hasResolvedSystem
                                 ? isResolvedHomeAssistant
                                     ? `<p>Na urządzeniu został przygotowany system <b>Home Assistant</b>, gotowy do uruchomienia i dalszej konfiguracji pod potrzeby inteligentnego domu.</p>
-                                       <p>Po rozpakowaniu komputer jest ✔️<b>gotowy do działania</b> jako centrum automatyki domowej.</p>`
+                                       <p>Po rozpakowaniu komputer jest ✔️<b>gotowy do dalszej konfiguracji</b> jako centrum automatyki domowej.</p>`
                                     : isResolvedLinuxLike
                                         ? `<p>Na urządzeniu zainstalowano system <b>${resolvedSystem}</b>, przygotowany do uruchomienia i dalszej konfiguracji.</p>
                                            <p>Komputer po rozpakowaniu z pudełka jest ✔️<b>gotowy do pracy.</b></p>`
@@ -826,12 +773,13 @@ function AddPC(props: AddProductProps) {
                 }, {
                     "items": [{
                         "type": "TEXT",
-                        "content": ApiloDescription(shoper_cpuName, shoper_cpuModel, shoper_ramSize, shoper_ramType, shoper_diskType, shoper_diskSize, cpuTypesDescriptions[shoper_cpuName as keyof typeof cpuTypesDescriptions],
+                        "content": ApiloDescription(shoper_cpuName, shoper_cpuModel, shoper_ramSize, shoper_ramType, shoper_diskType, shoper_diskSize, getCpuTypeDescription(shoper_cpuName, "pl"),
                             ramTypesDescriptions[shoper_ramType as keyof typeof ramTypesDescriptions],
                             diskTypesDescriptions[shoper_diskType as keyof typeof diskTypesDescriptions], shoper_gpuName, shoper_gpuDescription)
 
                     }]
                 },
+                extraFeatureItems ? { items: [{ type: "TEXT", content: `<h2>Dodatkowe cechy</h2><ul>${extraFeatureItems}</ul>` }] } : null,
                 buildWirelessCommunicationSection(formData["Komunikacja"]),
                 !allegroSystemImageUrl
                     ? null
@@ -892,19 +840,8 @@ function AddPC(props: AddProductProps) {
             if (axios.isAxiosError(error)) {
                 const apiError = error.response?.data;
 
-                const allegroError = apiError?.errors?.[0];
-
-                const userMessage = allegroError?.userMessage || allegroError?.message || error.message;
-                const metadata = allegroError?.metadata;
-
-                let fullMessage = userMessage;
-                if (metadata) {
-                    fullMessage += `\nSzczegóły: ${JSON.stringify(metadata, null, 2)}`;
-                }
-                fullMessage += `\nPełny błąd: ${JSON.stringify(apiError, null, 2)}`;
-
                 console.error("Błąd Allegro:", apiError);
-                toast.error(fullMessage);
+                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
             } else {
                 console.error("Błąd aplikacji:", error);
                 toast.error("Wystąpił nieznany błąd.");
@@ -929,8 +866,10 @@ function AddPC(props: AddProductProps) {
         connectProductAllegro && lockedParams.has(paramName);
 
     useEffect(() => {
+        setResponsibleProducerId("");
+        setResponsibleData(undefined);
         handleGetResponsiblePrducers()
-    }, [props.accessTokenAllegro]);
+    }, [props.accessTokenAllegro, props.allegroAccountId]);
 
     useEffect(() => {
 
@@ -1075,12 +1014,26 @@ function AddPC(props: AddProductProps) {
         attributeList.forEach((attribute) => {
             const attributeValue = (data as Record<string, unknown>)[`attribute_${attribute.attribute_id}`];
 
-            if (attributeValue == null) return;
+            if (isAdditionalFeaturesName(attribute.name)) {
+                attributes[attribute.attribute_id] = String(attributeValue ?? "");
+                return;
+            }
+
+            if (attributeValue == null || attributeValue === "") return;
+
+            if (String(attribute.type) === "2") {
+                const selected = resolveShoperSelectValue(attribute, attributeValue);
+                if (selected !== undefined) attributes[attribute.attribute_id] = selected;
+                return;
+            }
 
             if (typeof attributeValue === "string") {
                 attributes[attribute.attribute_id] = attributeValue;
+            } else if (typeof attributeValue === "boolean") {
+                attributes[attribute.attribute_id] = attributeValue ? "1" : "0";
             } else if (isStringArray(attributeValue)) {
-                attributes[attribute.attribute_id] = attributeValue.filter(s => s.trim() !== "").join(JOINER);
+                const selected = attributeValue.filter(s => s.trim() !== "");
+                if (selected.length) attributes[attribute.attribute_id] = selected.join(JOINER);
             }
         });
         attributes[307] = "24 miesiące";
@@ -1114,22 +1067,20 @@ function AddPC(props: AddProductProps) {
             setGpuDescriptionsSK("Integrovaná grafická karta je postačujúca na každodenné úlohy, ako je prehliadanie internetu, sledovanie filmov alebo základná úprava obrázkov, no môže mať problémy s náročnými hrami a programami. Ide o ekonomické riešenie pre používateľov, ktorí nepotrebujú vysoký grafický výkon.")
         }
 
-        //dodaj zdjęcia do apilo
-        apiloImageUUIDs = await AddImageApilo(props, selectedImages)
-
         // Zbieranie atrybutów
         const attributes = buildShoperAttributes(data);
 
         //dodaj produkt do shoper
         try {
+            if (addToApilo) apiloImageUUIDs = await AddImageApilo(props, selectedImages)
 
-            let response = AddProductShoper(data, attributes, nameCZ, nameSK, gaugeId, props, '249', relatedPackId || undefined)
+            const response = await AddProductShoper(data, attributes, nameCZ, nameSK, gaugeId, props, '249', relatedPackId || undefined)
 
             //dodaj produkt do apilo
-            let apiloResponse: ApiloResponse = await AddProductApilo(data, props, apiloImageUUIDs)
-
-            toast.success("Produkt został pomyślnie dodany.");
-            let ApiloAddedProductsFirstKey = Object.keys(apiloResponse.products)[0];
+            if (addToApilo) {
+                let apiloResponse: ApiloResponse = await AddProductApilo(data, props, apiloImageUUIDs)
+                let ApiloAddedProductsFirstKey = Object.keys(apiloResponse.products)[0];
+            }
 
             //dodaj atrybuty do apilo 
             // const apiloAttributes = [
@@ -1207,14 +1158,18 @@ function AddPC(props: AddProductProps) {
             if (selectedImages.length > 0) {
                 await AddImageShoper(response, selectedImages, imageLinks, props)
             }
+            toast.success(addToApilo ? "Produkt został dodany do Shopera i Apilo." : "Produkt został dodany do Shopera.");
 
         } catch (error) {
+            const fallbackMessage = addToApilo
+                ? "Nie udało się dodać produktu do Shopera lub Apilo."
+                : "Nie udało się dodać produktu do Shopera.";
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getApiErrorMessage(error, fallbackMessage, attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getApiErrorMessage(error, fallbackMessage, attributeList));
             }
         };
     }
@@ -1261,7 +1216,6 @@ function AddPC(props: AddProductProps) {
                         gfx_id: 103221,
                         delivery_id: 1
                     },
-                    attributes: attributes,
                     gauge_id: gaugeId,
                     ...(safetyProducerId ? { product_safety_producer_id: safetyProducerId } : {}),
                     ...(safetyCertificateIds.length ? { product_safety_certificate_ids: safetyCertificateIds } : {}),
@@ -1287,6 +1241,21 @@ function AddPC(props: AddProductProps) {
                 },
                 props,
                 baseSuccessMessage: "Zaktualizowano dane podstawowe produktu.",
+                finalAttributes: attributes,
+                verify: async () => {
+                    const additionalFeaturesAttribute = findAdditionalFeaturesAttribute(attributeList);
+                    if (!additionalFeaturesAttribute) return;
+                    const expected = attributes[additionalFeaturesAttribute.attribute_id];
+                    const readback = await axios.get(`${API_URL}/product/${offerId}`, {
+                        headers: { Authorization: `Bearer ${props.authToken}`, "Cache-Control": "no-cache" },
+                    });
+                    const product = readback.data?.product ?? readback.data;
+                    const { entries } = readShoperProductAttributes(product?.attributes ?? product?.attribute ?? []);
+                    const actual = resolveImportedAdditionalFeatures(entries, additionalFeaturesAttribute.attribute_id, "");
+                    if (actual !== expected) {
+                        throw new Error("Shoper nie zapisał atrybutu „Dodatkowe cechy”. Sprawdź wartość w panelu Shopera.");
+                    }
+                },
             });
 
             if (selectedImages.length > 0) {
@@ -1295,10 +1264,10 @@ function AddPC(props: AddProductProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas aktualizacji produktu");
+                toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu.", attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas aktualizacji produktu");
+                toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu.", attributeList));
             }
         } finally {
             setUpdatingProduct(false);
@@ -1332,6 +1301,23 @@ function AddPC(props: AddProductProps) {
     let additionalInfo = additionalInfoAttributeId
         ? watch(`attribute_${additionalInfoAttributeId}`, "")
         : "";
+    const extraFeaturesAttributeId = findAdditionalFeaturesAttribute(attributeList)?.attribute_id;
+    const extraFeatures = extraFeaturesAttributeId
+        ? String(watch(`attribute_${extraFeaturesAttributeId}`, "") ?? "")
+        : "";
+
+    useEffect(() => {
+        if (!extraFeaturesAttributeId || !pendingImportedExtraFeatures) return;
+        const field = `attribute_${extraFeaturesAttributeId}`;
+        const importedValue = resolveImportedAdditionalFeatures(
+            pendingImportedExtraFeatures.entries,
+            extraFeaturesAttributeId,
+            pendingImportedExtraFeatures.text,
+        );
+        setValue(field, importedValue, { shouldDirty: true });
+        if (importedValue) markImportedFields([field]);
+        setPendingImportedExtraFeatures(null);
+    }, [extraFeaturesAttributeId, pendingImportedExtraFeatures, getValues, setValue, markImportedFields]);
     let included = includedAttributeId
         ? watch(`attribute_${includedAttributeId}`, "")
         : "";
@@ -1343,6 +1329,8 @@ function AddPC(props: AddProductProps) {
     let shoper_touchScreen = watch(`attribute_${1250}`);
     let shoper_microphone = watch(`attribute_${1249}`);
     let shoper_camera = watch(`attribute_${1248}`);
+    const aioStandAttributeId = getAttributeIdByNames(["Podstawka AIO"]);
+    const aioStand = aioStandAttributeId ? String(watch(`attribute_${aioStandAttributeId}`, "") ?? "") : "";
     let descriptionLanguage = watch("descriptionLanguage", "description")
     let Price = watch("price", 0);
     let Stock = watch("stock", 0);
@@ -1376,6 +1364,7 @@ function AddPC(props: AddProductProps) {
     let shoper_CasePorts = watch(`attribute_${869}`);
     let shoper_MainBoardPorts = watch(`attribute_${1258}`);
     let shoper_GpuPorts = watch(`attribute_${1255}`);
+    const portGroups = createPcPortGroups(shoper_CasePorts, shoper_MainBoardPorts, shoper_GpuPorts);
     let shoper_grade = watch(`attribute_${894}`);
     let shoper_caseType = watch(`attribute_${913}`);
     let shoper_wifi = watch(`attribute_${1254}`, false);
@@ -1406,6 +1395,7 @@ function AddPC(props: AddProductProps) {
         shoper_touchScreen,
         shoper_microphone,
         shoper_camera,
+        aioStand,
     )
 
     useEffect(() => {
@@ -1429,6 +1419,28 @@ function AddPC(props: AddProductProps) {
             cancelled = true;
         };
     }, [additionalInfo]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!splitAdditionalFeatures(extraFeatures).length) {
+            setExtraFeaturesCZ("");
+            setExtraFeaturesSK("");
+            return;
+        }
+        setExtraFeaturesCZ("");
+        setExtraFeaturesSK("");
+        const timer = window.setTimeout(() => {
+            Promise.all([
+                translateAdditionalFeatures(extraFeatures, handleTranslateCZ),
+                translateAdditionalFeatures(extraFeatures, handleTranslateSK),
+            ]).then(([cz, sk]) => {
+                if (cancelled) return;
+                setExtraFeaturesCZ(cz);
+                setExtraFeaturesSK(sk);
+            });
+        }, 400);
+        return () => { cancelled = true; window.clearTimeout(timer); };
+    }, [extraFeatures]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1464,9 +1476,9 @@ function AddPC(props: AddProductProps) {
         shoper_system, shoper_ramType,
         shoper_ramSize,
         additionalTranslationsCZ[shoper_dvd],
-        ports,
+        portGroups,
         additionalInfoCZ,
-        cpuTypesDescriptionsCZ["Intel Core i3"],
+        getCpuTypeDescription(shoper_cpuName, "cz"),
         diskTypesDescriptionsCZ.HDD,
         ramTypesDescriptionsCZ.DDR2,
         systemTypeCZ[shoper_system as keyof typeof systemType],
@@ -1481,7 +1493,9 @@ function AddPC(props: AddProductProps) {
         additionalTranslationsCZ[shoper_touchScreen],
         additionalTranslationsCZ[shoper_microphone],
         additionalTranslationsCZ[shoper_camera],
-        shoper_wifi
+        shoper_wifi,
+        extraFeaturesCZ || extraFeatures,
+        aioStand
     ));
     let descriptionSK = watch("descriptionSK", pcTemplateSK(
         nameSK,
@@ -1495,9 +1509,9 @@ function AddPC(props: AddProductProps) {
         shoper_system, shoper_ramType,
         shoper_ramSize,
         additionalTranslationsSK[shoper_dvd],
-        shoper_CasePorts,
+        portGroups,
         additionalInfoSK,
-        cpuTypesDescriptionsSK["Intel Core i3"],
+        getCpuTypeDescription(shoper_cpuName, "sk"),
         diskTypesDescriptionsSK.HDD,
         ramTypesDescriptionsSK.DDR2,
         systemTypeSK[shoper_system as keyof typeof systemType],
@@ -1512,6 +1526,8 @@ function AddPC(props: AddProductProps) {
         additionalTranslationsSK[shoper_touchScreen],
         additionalTranslationsSK[shoper_microphone],
         additionalTranslationsSK[shoper_camera],
+        extraFeaturesSK || extraFeatures,
+        aioStand
     ));
     let description = watch("description", pcTemplateNew(
         name,
@@ -1526,9 +1542,9 @@ function AddPC(props: AddProductProps) {
         shoper_system, shoper_ramType,
         shoper_ramSize,
         shoper_dvd,
-        ports,
+        portGroups,
         additionalInfo,
-        cpuTypesDescriptions["Intel Core i3"],
+        getCpuTypeDescription(shoper_cpuName, "pl"),
         diskTypesDescriptions.HDD,
         ramTypesDescriptions.DDR2,
         systemType[shoper_system as keyof typeof systemType] ?? "",
@@ -1543,59 +1559,57 @@ function AddPC(props: AddProductProps) {
         additionalTranslationsPL[shoper_touchScreen],
         additionalTranslationsPL[shoper_microphone],
         additionalTranslationsPL[shoper_camera],
-        shoper_wifi
+        shoper_wifi,
+        extraFeatures,
+        aioStand
 
     ));
 
     const handleImportAllegroFormToShoper = () => {
-        // setValue("attribute_869", formData["złącza"]);
-        setValue("attribute_757", formData["Wysokość produktu"]);
-        setValue("attribute_758", formData["Szerokość produktu"]);
-        setValue("attribute_759", formData["Głębokość produktu"]);
-        setValue("attribute_761", formData["Kolor"]);
-        setValue("attribute_769", formData["Liczba rdzeni procesora"]);
-        setValue("attribute_770", formData["Liczba wątków procesora"]);
-        setValue("attribute_764", formData["Taktowanie bazowe procesora"]);
-        setValue("attribute_765", formData["Taktowanie maksymalne procesora"]);
-        setValue("attribute_776", formData["Model"]);
-        setValue("attribute_775", formData["Typ napędu"]);
-        setValue("attribute_768", formData["System operacyjny"]);
-        setValue("attribute_774", formData["Pojemność dysku"]);
-        setValue("attribute_773", formData["Typ dysku twardego"]);
-        setValue("attribute_771", formData["Model procesora"]);
-        setValue("attribute_762", formData["Seria"]);
-        setValue("attribute_763", formData["Typ pamięci RAM"]);
-        setValue("attribute_766", formData["Wielkość pamięci RAM"]);
-        setValue("attribute_1245", formData["Chipset karty graficznej"]);
-        setValue("attribute_1244", formData["Rodzaj karty graficznej"]);
-        setValue("attribute_913", formData["Typ obudowy"]);
-        setValue("attribute_1255", formData["Złącza karty graficznej"]);
-        setValue("attribute_1256", formData["Moc zasilacza"]);
-        setValue("attribute_1257", formData["Komunikacja"]);
-        // setValue("included", formData["Załączone wyposażenie"].toString());
-
-        setValue("attribute_1258", formData["Złącza zewnętrzne płyty głównej"]);
-        setValue("attribute_869", formData["Złącza obudowy"]);
-    }
-    const toStringArray = (v: unknown): string[] => {
-        if (Array.isArray(v)) return v.map(String).map(s => s.trim()).filter(Boolean);
-        if (typeof v === "string") {
-            // spróbuj sparsować JSON-ową tablicę
-            try {
-                const parsed = JSON.parse(v);
-                if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
-            } catch { }
-            // podziel po przecinkach, ale nie tych w liczbach (np. 3,5)
-            return v.split(/,(?!\d)/).map(s => s.trim()).filter(Boolean);
+        pauseDescriptionGenerationRef.current = false;
+        clearImportedFields();
+        if (!attributeList.length) {
+            toast.error("Poczekaj na pobranie atrybutów Shoper.");
+            return;
         }
-        return [];
-    };
-
+        const fields = [
+            [757, "Wysokość produktu"], [758, "Szerokość produktu"], [759, "Głębokość produktu"],
+            [761, "Kolor"], [769, "Liczba rdzeni procesora"], [770, "Liczba wątków procesora"],
+            [764, "Taktowanie bazowe procesora"], [765, "Taktowanie maksymalne procesora"],
+            [776, "Model"], [775, "Typ napędu"], [768, "System operacyjny"],
+            [774, "Pojemność dysku"], [773, "Typ dysku twardego"], [771, "Model procesora"],
+            [762, "Seria"], [763, "Typ pamięci RAM"], [766, "Wielkość pamięci RAM"],
+            [1245, "Chipset karty graficznej"], [1244, "Rodzaj karty graficznej"],
+            [913, "Typ obudowy"], [1255, "Złącza karty graficznej"], [1256, "Moc zasilacza"],
+            [1257, "Komunikacja"], [1258, "Złącza zewnętrzne płyty głównej"], [869, "Złącza obudowy"],
+        ] as const;
+        const attributesById = new Map(attributeList.map(attribute => [Number(attribute.attribute_id), attribute]));
+        const skipped: string[] = [];
+        let imported = 0;
+        for (const [id, name] of fields) {
+            const raw = formData[name];
+            if (raw == null || raw === "" || (Array.isArray(raw) && !raw.length)) continue;
+            const attribute = attributesById.get(id);
+            const value = attribute && resolveImportedShoperAttribute(attribute, raw);
+            if (value === undefined) {
+                skipped.push(name);
+                if (attribute && String(attribute.type) === "2" &&
+                    resolveImportedShoperAttribute(attribute, getValues(`attribute_${id}`)) === undefined) {
+                    setValue(`attribute_${id}`, "");
+                }
+                continue;
+            }
+            setValue(`attribute_${id}`, value as any, { shouldDirty: true, shouldValidate: true });
+            imported += 1;
+        }
+        if (skipped.length) toast.warning(`Pominięto ${skipped.length} pól bez odpowiednika w Shoperze: ${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? "..." : ""}.`);
+        if (imported) toast.success(`Zaimportowano ${imported} pól do Shopera.`);
+    }
     useEffect(() => {
         const merged = [
-            ...toStringArray(shoper_CasePorts),
-            ...toStringArray(shoper_MainBoardPorts),
-            ...toStringArray(shoper_GpuPorts),
+            ...portGroups.casePorts,
+            ...portGroups.motherboardPorts,
+            ...portGroups.gpuPorts,
         ];
 
         // deduplikacja z zachowaniem kolejności
@@ -1605,6 +1619,7 @@ function AddPC(props: AddProductProps) {
 
     useEffect(() => {
 
+        if (pauseDescriptionGenerationRef.current) return;
         const nextGaugeId = getGaugeIdForCaseType(shoper_caseType);
         setGaugeId(nextGaugeId);
         caseDescription = getCaseDescriptionForType(shoper_caseType);
@@ -1631,9 +1646,9 @@ function AddPC(props: AddProductProps) {
             shoper_ramType,
             shoper_ramSize,
             shoper_dvd,
-            ports,
+            portGroups,
             additionalInfo,
-            cpuTypesDescriptions[shoper_cpuName as keyof typeof cpuTypesDescriptions],
+            getCpuTypeDescription(shoper_cpuName, "pl"),
             ramTypesDescriptions[shoper_ramType as keyof typeof ramTypesDescriptions],
             diskTypesDescriptions[shoper_diskType as keyof typeof diskTypesDescriptions],
             systemType[shoper_system as keyof typeof systemType] ?? "",
@@ -1648,7 +1663,9 @@ function AddPC(props: AddProductProps) {
             additionalTranslationsPL[shoper_touchScreen],
             additionalTranslationsPL[shoper_microphone],
             additionalTranslationsPL[shoper_camera],
-            shoper_wifi
+            shoper_wifi,
+            extraFeatures,
+            aioStand
         ));
         setValue("descriptionSK", pcTemplateSK(
             nameSK,
@@ -1664,9 +1681,9 @@ function AddPC(props: AddProductProps) {
             shoper_ramType,
             shoper_ramSize,
             additionalTranslationsSK[shoper_dvd],
-            shoper_CasePorts,
+            portGroups,
             additionalInfoSK,
-            cpuTypesDescriptionsSK[shoper_cpuName as keyof typeof cpuTypesDescriptions],
+            getCpuTypeDescription(shoper_cpuName, "sk"),
             ramTypesDescriptionsSK[shoper_ramType as keyof typeof ramTypesDescriptions],
             diskTypesDescriptionsSK[shoper_diskType as keyof typeof diskTypesDescriptions],
             systemTypeSK[shoper_system as keyof typeof systemTypeSK] ?? "",
@@ -1681,6 +1698,8 @@ function AddPC(props: AddProductProps) {
             additionalTranslationsSK[shoper_touchScreen],
             additionalTranslationsSK[shoper_microphone],
             additionalTranslationsSK[shoper_camera],
+            extraFeaturesSK || extraFeatures,
+            aioStand
         ));
         setValue("descriptionCZ", pcTemplateCZ(
             nameCZ,
@@ -1696,9 +1715,9 @@ function AddPC(props: AddProductProps) {
             shoper_ramType,
             shoper_ramSize,
             additionalTranslationsCZ[shoper_dvd],
-            ports,
+            portGroups,
             additionalInfoCZ,
-            cpuTypesDescriptionsCZ[shoper_cpuName as keyof typeof cpuTypesDescriptions],
+            getCpuTypeDescription(shoper_cpuName, "cz"),
             ramTypesDescriptionsCZ[shoper_ramType as keyof typeof ramTypesDescriptions],
             diskTypesDescriptionsCZ[shoper_diskType as keyof typeof diskTypesDescriptions],
             systemTypeCZ[shoper_system as keyof typeof systemTypeCZ] ?? "",
@@ -1713,15 +1732,57 @@ function AddPC(props: AddProductProps) {
             additionalTranslationsCZ[shoper_touchScreen],
             additionalTranslationsCZ[shoper_microphone],
             additionalTranslationsCZ[shoper_camera],
-            shoper_wifi
+            shoper_wifi,
+            extraFeaturesCZ || extraFeatures,
+            aioStand
         ));
-    }, [name, nameCZ, nameSK, shoper_grade, shoper_cpuName, shoper_cpuModel, condition, shoper_caseType, shoper_gpuName, shoper_diskType, shoper_diskSize, shoper_system, shoper_ramType, shoper_ramSize, shoper_dvd, shoper_CasePorts, additionalInfo, additionalInfoCZ, additionalInfoSK, included, IncludeCZ, IncludeSK, imageSrc, shoper_gpuDescription, gpuDescriptionsCZ, gpuDescriptionsSK, shoper_gpuType, shoper_resolution, shoper_matrixType, shoper_matrixSize, shoper_Frequency, shoper_touchScreen, shoper_microphone, shoper_camera, ports, shoper_wifi, shoper_wifi, setValue]);
+    }, [name, nameCZ, nameSK, shoper_grade, shoper_cpuName, shoper_cpuModel, condition, shoper_caseType, shoper_gpuName, shoper_diskType, shoper_diskSize, shoper_system, shoper_ramType, shoper_ramSize, shoper_dvd, shoper_CasePorts, shoper_MainBoardPorts, shoper_GpuPorts, additionalInfo, additionalInfoCZ, additionalInfoSK, extraFeatures, extraFeaturesCZ, extraFeaturesSK, included, IncludeCZ, IncludeSK, imageSrc, shoper_gpuDescription, gpuDescriptionsCZ, gpuDescriptionsSK, shoper_gpuType, shoper_resolution, shoper_matrixType, shoper_matrixSize, shoper_Frequency, shoper_touchScreen, shoper_microphone, shoper_camera, aioStand, ports, shoper_wifi, shoper_wifi, setValue]);
+
+    const handleResetShoperForm = () => {
+        resetRevisionRef.current += 1;
+        pauseDescriptionGenerationRef.current = true;
+        reset({
+            active: true,
+            stock: 1,
+            productSafetyProducerId: 0,
+            productSafetyCertificateIds: [],
+            description: "",
+            descriptionCZ: "",
+            descriptionSK: "",
+        });
+        clearImportedFields();
+        setPendingShoperAttributes(null);
+        setPendingImportedExtraFeatures(null);
+        setShoperOfferId("");
+        setRelatedPackId("");
+        setSelectedImages([]);
+        setImageLinks([]);
+        setImagePreviews([]);
+        setImageSrc("");
+        lastUploadKeyRef.current = "";
+        setDraggedImageIndex(null);
+        setIsImageManagerOpen(false);
+        setPorts([]);
+        setGaugeId(6);
+        setNameCZ("");
+        setNameSK("");
+        setIncludeCZ("");
+        setIncludeSK("");
+        setAdditionalInfoCZ("");
+        setAdditionalInfoSK("");
+        setExtraFeaturesCZ("");
+        setExtraFeaturesSK("");
+        setGpuDescriptionsCZ("");
+        setGpuDescriptionsSK("");
+        setAddToApilo(true);
+    };
 
     return (
         <>
             <div className="addProductMainContainer" style={{}}>
                 <Box style={{ display: 'flex', flexDirection: 'column' }}>
-                    <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <form className="shoper-import-form" onChangeCapture={(event) => { onImportedFieldChange(event); pauseDescriptionGenerationRef.current = false; }} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                        <ShoperImportedFieldStyles fields={importedFields} />
                         <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                         <Box
                             sx={{ py: 2, display: 'grid', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
@@ -1801,10 +1862,13 @@ function AddPC(props: AddProductProps) {
                                     <TextField InputLabelProps={{ shrink: true }} required label="tytuł" variant="outlined" type="text" inputProps={{ maxLength: 75 }} {...register("name", {
                                         onBlur: async (e) => {
                                             const value = e.target.value;
+                                            const revision = resetRevisionRef.current;
 
                                             try {
-                                                setNameCZ(await handleTranslateCZ(value))
-                                                setNameSK(await handleTranslateSK(value))
+                                                const [translatedCZ, translatedSK] = await Promise.all([handleTranslateCZ(value), handleTranslateSK(value)]);
+                                                if (revision !== resetRevisionRef.current) return;
+                                                setNameCZ(translatedCZ)
+                                                setNameSK(translatedSK)
                                                 toast.success("przetłumaczono");
                                             } catch (error) {
                                                 console.error("Błąd podczas tłumaczenia:", error);
@@ -1813,7 +1877,7 @@ function AddPC(props: AddProductProps) {
                                         }
                                     })} />
                                     <TextField defaultValue={1} required label="ilość" InputLabelProps={{ shrink: true }} variant="outlined" type="number"{...register("stock")} />
-                                    <TextField required label="cena" InputLabelProps={{ shrink: true }} variant="outlined" type="number"{...register("price")} />
+                                    <TextField required label="cena" InputLabelProps={{ shrink: true }} variant="outlined" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
                                     <TextField required label="SKU" InputLabelProps={{ shrink: true }} variant="outlined" {...register("SKU")} />
 
                                     <Controller
@@ -1835,7 +1899,7 @@ function AddPC(props: AddProductProps) {
                                                         {option?.name ?? ""}
                                                     </li>
                                                 )}
-                                                renderInput={(params) => <TextField {...params} label="Producent" />}
+                                                renderInput={(params) => <TextField {...params} name="producer" label="Producent" />}
                                                 onChange={(_, value) => {
                                                     field.onChange(value?.producer_id || 0);
                                                 }}
@@ -1854,6 +1918,7 @@ function AddPC(props: AddProductProps) {
                                             defaultValue={0}
                                             render={({ field }) => (
                                                 <Select
+                                                    name={field.name}
                                                     labelId="product-safety-producer-label"
                                                     label="Product Safety Producer"
                                                     value={field.value ?? 0}
@@ -1889,6 +1954,7 @@ function AddPC(props: AddProductProps) {
                                             defaultValue={[]}
                                             render={({ field }) => (
                                                 <Select
+                                                    name={field.name}
                                                     multiple
                                                     labelId="product-safety-certificates-label"
                                                     label="Product Safety Certificates"
@@ -1964,6 +2030,11 @@ function AddPC(props: AddProductProps) {
                                     register={register}
                                     loading={loading}
                                 />
+                                {!loading && attributeList.length > 0 && !extraFeaturesAttributeId && (
+                                    <Typography variant="body2" color="warning.main">
+                                        Dodaj atrybut tekstowy „Dodatkowe cechy” do grupy 47 w Shoperze, aby wpisywać cechy komputera.
+                                    </Typography>
+                                )}
 
                                 <label >opis</label>
                                 <textarea style={{ minWidth: '100%', maxWidth: '100%' }} defaultValue={pcTemplateNew("", "", "", "", "", '', '', '', '', '', '', '', '', '', [], '', '', '', '', '', '', '', "", '', '', '', '', '', '', '', '', false)} {...register("description")} />
@@ -2000,6 +2071,7 @@ function AddPC(props: AddProductProps) {
                                 )}
 
 
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button
                                     sx={{ fontSize: '15px' }}
                                     variant="contained"
@@ -2012,9 +2084,10 @@ function AddPC(props: AddProductProps) {
                                             Ładowanie…
                                         </>
                                     ) : (
-                                        "Dodaj produkt do shopera i apilo"
+                                        addToApilo ? "Dodaj produkt do Shopera i Apilo" : "Dodaj produkt do Shopera"
                                     )}
                                 </Button>
+                                </ApiloSubmitControls>
                                 <Button
                                     sx={{ fontSize: '15px' }}
                                     variant="contained"
@@ -2039,7 +2112,7 @@ function AddPC(props: AddProductProps) {
                                 ) : (
                                     "Dodaj produkt do Allegro"
                                 )}</Button>
-                                <Button variant="outlined" type="reset"  >Reset formularza</Button>
+                                <Button variant="outlined" type="button" onClick={handleResetShoperForm} disabled={loading || loadingShoperOffer || updatingProduct}>Reset formularza</Button>
                             </ThemeProvider>
                         </Box>
                     </form>

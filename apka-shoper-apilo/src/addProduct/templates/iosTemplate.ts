@@ -1,3 +1,5 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const IOSTemplate = (
     additionalInfo: string,
     G5: boolean,
@@ -16,7 +18,7 @@ export const IOSTemplate = (
     category: string,
     backCamera: string,
     frontCamera: string,
-) => `
+) => renderConditionalDescription(`
 
 
 <div style="display: flex; align-items: center; flex-direction: column; ">
@@ -356,9 +358,6 @@ export const IOSTemplate = (
             flex-direction: row;
             margin-top: 30px;
         }
-            .false{
-                display: none !important;
-            }
 
         .gradient-text {
             font-size: 48px;
@@ -720,7 +719,7 @@ export const IOSTemplate = (
 
 </div>
 
-`
+`)
 
 
 export const IOSTemplateCamera = (
@@ -740,6 +739,4 @@ export const IOSTemplateCamera = (
 </div>
 <p>Urządzenie wyposażony jest w wysokiej jakości aparat, który świetnie sprawdzi się zarówno w fotografii dziennej, jak i w trudniejszych warunkach oświetleniowych.</p>
 `
-
-
 

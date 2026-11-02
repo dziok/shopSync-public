@@ -1,6 +1,5 @@
 import axios from "axios";
 import { API_URL } from "../config";
-import { toast } from "react-toastify";
 import { IFormInput } from "../addProduct/addProduct";
 type AddProductProps = {
     authToken: string
@@ -29,7 +28,6 @@ export const AddProductApilo = async (data: IFormInput, props: AddProductProps, 
                 );
             } catch (error) {
                 console.error("Product delete error:", error);
-                toast.error("Wystąpił błąd podczas usuwania produktu");
                 throw error;
             }
         }
@@ -57,10 +55,9 @@ export const AddProductApilo = async (data: IFormInput, props: AddProductProps, 
     catch (error) {
         if (axios.isAxiosError(error)) {
             console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-            toast.error("Wystąpił błąd podczas dodawania produktu do apilo");
         } else {
             console.error("Błąd aplikacji:", error);
-            toast.error("Wystąpił błąd podczas dodawania produktu do apilo");
         }
+        throw error;
     };
 }

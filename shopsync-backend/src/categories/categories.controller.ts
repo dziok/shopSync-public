@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { JwtAuthGuard } from '../auth/auth.guard';
 import { DecodedAuthTokens } from '../decorators';
@@ -18,6 +18,15 @@ export class CategoriesController {
         @DecodedAuthTokens() decodedTokens: JwtPayload,
     ) {
         return this.CategoriesService.getCategoriesFromShoper(decodedTokens, limit, page, filters, include);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('shoper/:id')
+    async getCategory(
+        @Param('id') id: string,
+        @DecodedAuthTokens() decodedTokens: JwtPayload,
+    ) {
+        return this.CategoriesService.getCategoryFromShoper(decodedTokens, id);
     }
 
     @UseGuards(JwtAuthGuard)

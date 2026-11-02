@@ -7,7 +7,7 @@ import { Autocomplete, Box, Button, Checkbox, FormControl, FormControlLabel, Inp
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import { batteryDescription, GradeDescriptios, keyboardDescription, LaptopTemplate, matrixGradeDescriptios } from "./templates/laptopTemplate";
 import { LaptopTemplateApilo } from "./templates/laptopTemplate-apilo";
 import { LaptopTemplateCZ } from "./templatesCZ/laptopTemplateCZ";
@@ -17,6 +17,8 @@ import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translat
 import { LaptopAttributes_CZ, LaptopAttributes_SK, LaptopStatusKey } from "./additionalDescriptions/attributesTranslations";
 import RelatedProductsSelect from "../relatedProductsSelect";
 import React from "react";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 type AddLaptopProps = {
     authToken: string,
@@ -116,10 +118,11 @@ function AddLaptop(props: AddLaptopProps) {
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [portsListString, setPortsListString] = useState("");
     const { register, handleSubmit, setValue, reset, watch, control } = useForm<IFormInput>();
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const images = useProductImages();
+    const { selectedImages, imageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     // const [apiloImageUUIDS, setApiloImageUUIDS] = useState<string[]>([]);
     const [categories, setCategories] = useState<CategoryResource[]>([]);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
     const [additinalKeyboardInfoCZ, setAdditinalKeyboardInfoCZ] = useState("");
@@ -130,26 +133,6 @@ function AddLaptop(props: AddLaptopProps) {
     const [additinalcaseInfoSK, setAdditinalcaseInfoSK] = useState("");
     const [relatedPackId, setRelatedPackId] = useState("");
     let apiloImageUUIDs: string[] = [];
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-
-        setSelectedImages(sortedFiles);
-    };
-
-    useEffect(() => {
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
 
 
     const {
@@ -238,7 +221,7 @@ function AddLaptop(props: AddLaptopProps) {
 
         try {
             //dodaj zdjęcia do apilo
-            try {
+            if (addToApilo) try {
                 for (let i = 0; i < selectedImages.length; i++) {
                     const formData = new FormData();
                     formData.append("file", selectedImages[i]); // Dodajemy plik do formData
@@ -254,7 +237,6 @@ function AddLaptop(props: AddLaptopProps) {
                         }
                     );
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
@@ -451,7 +433,7 @@ function AddLaptop(props: AddLaptopProps) {
                         }
                     });
 
-                    toast.success("Produkt " + updateResponse.data + " update");
+                    toast.success("Produkt został zaktualizowany w Shoperze.");
                 }
                 catch (error) {
                     if (axios.isAxiosError(error)) {
@@ -465,6 +447,7 @@ function AddLaptop(props: AddLaptopProps) {
             }
 
             updateDescription()
+            if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
                     sku: data.SKU.toUpperCase()
@@ -511,7 +494,10 @@ function AddLaptop(props: AddLaptopProps) {
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
-            toast.success("Produkt " + response.data + " został pomyślnie dodany.");
+            }
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -532,7 +518,6 @@ function AddLaptop(props: AddLaptopProps) {
                             Authorization: `Bearer ${props.authToken}`
                         }
                     });
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane`);
                 } catch (error) {
                     console.error("Image upload error:", error);
                     toast.error("Błąd podczas dodawania zdjęcia");
@@ -543,10 +528,10 @@ function AddLaptop(props: AddLaptopProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error));
             }
 
         };
@@ -738,7 +723,7 @@ function AddLaptop(props: AddLaptopProps) {
                             <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
                             <TextField required label="SKU" {...register("SKU")} />
                             <TextField required label="Ilość" type="number"{...register("stock")} />
-                            <TextField required label="Cena" type="number"{...register("price")} />
+                            <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
                             <TextField required label="Tytuł" type="text"{...register("name", {
                                 onBlur: async (e) => {
                                     const value = e.target.value;
@@ -1693,28 +1678,12 @@ function AddLaptop(props: AddLaptopProps) {
                             <label >opis</label>
                             <textarea defaultValue={LaptopTemplate('', '', '', '', '', '', '', '', '', false, true, '', '', '', '', true, false, false, '', '', '', '', false, false)}  {...register("description")} />
                             <textarea defaultValue={LaptopTemplateApilo('', '', '', '', '', '', '', '', '', false, true, '', '', '', '', true, false, false, '', '', '', '', '', '', '', '', '', '', '', '', '', '', false, '', false, false, false, false, false, false, false, false)}  {...register("descriptionApilo")} />
-                            <label>Dodaj zdjęcia</label>
-                            <Button
-                                variant="contained"
-                                component="label"
-                            >
-                                Dodaj zdjęcia
-                                <input
-                                    style={{ width: '100%' }}
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    hidden
-                                />
-                            </Button>
-
-                            <Typography>
-                                {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                            </Typography>
+                            <ProductImageManager {...images} />
 
                             <Button variant="outlined" onClick={() => reset()}>Reset formularza</Button>
-                            <Button variant="contained" type="submit" >Dodaj</Button>
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                            </ApiloSubmitControls>
                         </ThemeProvider>
                     </Box>
                 </form>

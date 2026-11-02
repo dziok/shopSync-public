@@ -2,6 +2,7 @@ import { HttpService } from "@nestjs/axios";
 import {
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtPayload, LoginShoperDto } from "./auth.dto";
@@ -12,6 +13,7 @@ import axios from "axios";
 import * as qs from "qs";
 import { chmod, mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
+import { randomUUID } from "crypto";
 import {
   buildAllegroUserAgent,
   withAllegroUserAgent,
@@ -26,9 +28,18 @@ const CODE_URL_prod = "https://allegro.pl/auth/oauth/device";
 const TOKEN_URL_prod = "https://allegro.pl/auth/oauth/token";
 
 interface AllegroProdTokenState {
+  id?: string;
+  label?: string;
+  userName?: string;
   accessToken: string;
   accessTokenExpiresAt: string;
   refreshToken: string;
+  updatedAt: string;
+}
+
+interface AllegroProdAccountsState {
+  activeAccountId?: string;
+  accounts: Required<AllegroProdTokenState>[];
   updatedAt: string;
 }
 
@@ -41,9 +52,11 @@ interface AllegroProdTokenResponse {
 
 @Injectable()
 export class AuthService {
-  private allegroProdTokenState?: AllegroProdTokenState;
-  private allegroProdTokenStateLoaded = false;
-  private pendingAllegroProdToken?: Promise<string>;
+  private allegroProdAccountsState?: AllegroProdAccountsState;
+  private allegroProdAccountsStateLoaded = false;
+  private pendingAllegroProdAccountsLoad?: Promise<void>;
+  private allegroProdAccountsWrite = Promise.resolve();
+  private pendingAllegroProdTokens = new Map<string, Promise<string>>();
 
   constructor(
     private httpService: HttpService,
@@ -228,7 +241,7 @@ export class AuthService {
     return response.data;
   }
 
-  async pollAccessTokenProd(deviceCodeProd: string): Promise<any> {
+  async pollAccessTokenProd(deviceCodeProd: string, label = ""): Promise<any> {
     const headers = withAllegroUserAgent(
       {
         Authorization: this.getBasicAuthHeaderProd(),
@@ -247,35 +260,131 @@ export class AuthService {
       data,
       { headers },
     );
-    const accessToken = await this.saveAllegroProdTokenResponse(response.data);
+    const account = await this.saveAllegroProdTokenResponse(response.data, "", label);
     return {
-      access_token: accessToken,
+      account_id: account.id,
+      label: account.label,
+      access_token: account.accessToken,
       expires_in: response.data.expires_in,
       token_type: response.data.token_type,
     };
   }
 
-  async getAllegroProdAccessToken(): Promise<string> {
-    if (!this.pendingAllegroProdToken) {
-      this.pendingAllegroProdToken = this.resolveAllegroProdAccessToken().finally(
-        () => {
-          this.pendingAllegroProdToken = undefined;
-        },
-      );
-    }
-    return this.pendingAllegroProdToken;
+  async getAllegroProdAccounts() {
+    await this.loadAllegroProdAccountsState();
+    const accounts = await Promise.all(
+      (this.allegroProdAccountsState?.accounts ?? []).map(async (account) => {
+        try {
+          return {
+            id: account.id,
+            label: account.label,
+            userName: account.userName,
+            access_token: await this.getAllegroProdAccessToken(account.id),
+            status: "connected" as const,
+            updatedAt: account.updatedAt,
+          };
+        } catch (error) {
+          const allegroError = axios.isAxiosError(error) ? error.response?.data?.error : undefined;
+          return {
+            id: account.id,
+            label: account.label,
+            userName: account.userName,
+            access_token: "",
+            status: allegroError === "invalid_grant" || error instanceof UnauthorizedException
+              ? "login_required" as const
+              : "retry" as const,
+            updatedAt: account.updatedAt,
+          };
+        }
+      }),
+    );
+
+    return {
+      activeAccountId: this.allegroProdAccountsState?.activeAccountId ?? accounts[0]?.id ?? "",
+      accounts,
+    };
   }
 
-  private async resolveAllegroProdAccessToken(): Promise<string> {
-    await this.loadAllegroProdTokenState();
-    if (
-      this.allegroProdTokenState
-      && Date.parse(this.allegroProdTokenState.accessTokenExpiresAt) > Date.now() + 60_000
-    ) {
-      return this.allegroProdTokenState.accessToken;
+  async renameAllegroProdAccount(accountId: string, label: string) {
+    await this.loadAllegroProdAccountsState();
+    const trimmedLabel = label.trim();
+
+    if (!trimmedLabel) {
+      throw new UnauthorizedException("Account label is required");
     }
 
-    if (!this.allegroProdTokenState?.refreshToken) {
+    const state = this.requireAllegroProdAccountsState();
+    const account = state.accounts.find((item) => item.id === accountId);
+    if (!account) {
+      throw new UnauthorizedException("Allegro account not found");
+    }
+
+    account.label = trimmedLabel;
+    account.updatedAt = new Date().toISOString();
+    state.updatedAt = account.updatedAt;
+    await this.saveAllegroProdAccountsState(state);
+    return { id: account.id, label: account.label };
+  }
+
+  async setDefaultAllegroProdAccount(accountId: string) {
+    await this.loadAllegroProdAccountsState();
+    const state = this.requireAllegroProdAccountsState();
+    if (!state.accounts.some((account) => account.id === accountId)) {
+      throw new NotFoundException("Allegro account not found");
+    }
+
+    if (state.activeAccountId !== accountId) {
+      state.activeAccountId = accountId;
+      state.updatedAt = new Date().toISOString();
+      await this.saveAllegroProdAccountsState(state);
+    }
+    return { activeAccountId: accountId };
+  }
+
+  async deleteAllegroProdAccount(accountId: string) {
+    await this.loadAllegroProdAccountsState();
+    const state = this.requireAllegroProdAccountsState();
+    const remainingAccounts = state.accounts.filter((account) => account.id !== accountId);
+
+    if (remainingAccounts.length === state.accounts.length) {
+      throw new UnauthorizedException("Allegro account not found");
+    }
+
+    const updatedAt = new Date().toISOString();
+    state.accounts = remainingAccounts;
+    state.activeAccountId = remainingAccounts[0]?.id;
+    state.updatedAt = updatedAt;
+    await this.saveAllegroProdAccountsState(state);
+    return { activeAccountId: state.activeAccountId ?? "", accounts: remainingAccounts.map(({ id, label }) => ({ id, label })) };
+  }
+
+  async getAllegroProdAccessToken(accountId?: string): Promise<string> {
+    await this.loadAllegroProdAccountsState();
+    const state = this.requireAllegroProdAccountsState();
+    const targetAccountId = accountId || state.activeAccountId || state.accounts[0].id;
+    if (!this.pendingAllegroProdTokens.has(targetAccountId)) {
+      const pendingToken = this.resolveAllegroProdAccessToken(targetAccountId).finally(() => {
+        this.pendingAllegroProdTokens.delete(targetAccountId);
+      });
+      this.pendingAllegroProdTokens.set(targetAccountId, pendingToken);
+    }
+    return this.pendingAllegroProdTokens.get(targetAccountId)!;
+  }
+
+  private async resolveAllegroProdAccessToken(accountId?: string): Promise<string> {
+    await this.loadAllegroProdAccountsState();
+    const state = this.requireAllegroProdAccountsState();
+    const targetAccountId = accountId || state.activeAccountId || state.accounts[0]?.id;
+    const account = state.accounts.find((item) => item.id === targetAccountId);
+
+    if (
+      account
+      && Date.parse(account.accessTokenExpiresAt) > Date.now() + 60_000
+    ) {
+      return account.accessToken;
+    }
+
+    if (!account?.refreshToken) {
       throw new UnauthorizedException("Allegro authorization is required");
     }
 
@@ -288,7 +397,7 @@ export class AuthService {
     );
     const data = qs.stringify({
       grant_type: "refresh_token",
-      refresh_token: this.allegroProdTokenState.refreshToken,
+      refresh_token: account.refreshToken,
     });
     const response = await axios.post<AllegroProdTokenResponse>(
       TOKEN_URL_prod,
@@ -297,14 +406,20 @@ export class AuthService {
     );
     return this.saveAllegroProdTokenResponse(
       response.data,
-      this.allegroProdTokenState.refreshToken,
-    );
+      account.refreshToken,
+      account.label,
+      account.id,
+      false,
+    ).then((nextAccount) => nextAccount.accessToken);
   }
 
   private async saveAllegroProdTokenResponse(
     response: AllegroProdTokenResponse,
     fallbackRefreshToken = "",
-  ): Promise<string> {
+    label = "",
+    accountId = "",
+    makeActive = true,
+  ): Promise<Required<AllegroProdTokenState>> {
     const accessToken = String(response.access_token ?? "").trim();
     const refreshToken = String(response.refresh_token ?? fallbackRefreshToken).trim();
     if (!accessToken || !refreshToken) {
@@ -325,32 +440,70 @@ export class AuthService {
       );
     }
 
-    const state: AllegroProdTokenState = {
+    await this.loadAllegroProdAccountsState();
+    const state = this.allegroProdAccountsState ?? {
+      accounts: [],
+      updatedAt: new Date().toISOString(),
+    };
+    const userName = this.getJwtPayload(accessToken)?.user_name?.toString() ?? "";
+    const now = new Date().toISOString();
+    const existingAccount = accountId
+      ? state.accounts.find((account) => account.id === accountId)
+      : undefined;
+    const existingByRefreshToken = state.accounts.find((account) => account.refreshToken === refreshToken);
+    const existingByUserName = userName
+      ? state.accounts.find((account) => account.userName === userName)
+      : undefined;
+    const targetAccount = existingAccount ?? existingByUserName ?? existingByRefreshToken;
+    const nextAccount: Required<AllegroProdTokenState> = {
+      id: targetAccount?.id ?? randomUUID(),
+      label: targetAccount?.label || label.trim() || `Konto Allegro ${state.accounts.length + 1}`,
+      userName: userName || targetAccount?.userName || "",
       accessToken,
       accessTokenExpiresAt,
       refreshToken,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
-    this.allegroProdTokenState = state;
-    this.allegroProdTokenStateLoaded = true;
-    await this.saveAllegroProdTokenState(state);
-    return accessToken;
+
+    state.accounts = targetAccount
+      ? state.accounts.map((account) => account.id === targetAccount.id ? nextAccount : account)
+      : [...state.accounts, nextAccount];
+    state.activeAccountId = makeActive
+      ? nextAccount.id
+      : state.activeAccountId ?? nextAccount.id;
+    state.updatedAt = now;
+
+    this.allegroProdAccountsState = state;
+    this.allegroProdAccountsStateLoaded = true;
+    await this.saveAllegroProdAccountsState(state);
+    return nextAccount;
   }
 
-  private async loadAllegroProdTokenState(): Promise<void> {
-    if (this.allegroProdTokenStateLoaded) return;
-    this.allegroProdTokenStateLoaded = true;
+  private async loadAllegroProdAccountsState(): Promise<void> {
+    if (this.allegroProdAccountsStateLoaded) return;
+    if (!this.pendingAllegroProdAccountsLoad) {
+      this.pendingAllegroProdAccountsLoad = this.readAllegroProdAccountsState();
+    }
+    try {
+      await this.pendingAllegroProdAccountsLoad;
+    } finally {
+      this.pendingAllegroProdAccountsLoad = undefined;
+    }
+  }
+
+  private async readAllegroProdAccountsState(): Promise<void> {
     try {
       const rawState = await readFile(this.getAllegroTokenFilePath(), "utf8");
-      const state = JSON.parse(rawState) as AllegroProdTokenState;
-      if (
-        typeof state.accessToken !== "string"
-        || typeof state.accessTokenExpiresAt !== "string"
-        || typeof state.refreshToken !== "string"
-      ) {
+      const parsedState = JSON.parse(rawState) as AllegroProdTokenState | AllegroProdAccountsState;
+      const state = this.normalizeAllegroProdAccountsState(parsedState);
+      if (!state) {
         throw new Error("Invalid Allegro token state");
       }
-      this.allegroProdTokenState = state;
+      this.allegroProdAccountsState = state;
+      if (JSON.stringify(parsedState) !== JSON.stringify(state)) {
+        await this.saveAllegroProdAccountsState(state);
+      }
+      this.allegroProdAccountsStateLoaded = true;
     } catch (error) {
       if (
         error
@@ -358,24 +511,105 @@ export class AuthService {
         && "code" in error
         && error.code === "ENOENT"
       ) {
+        this.allegroProdAccountsStateLoaded = true;
         return;
       }
       throw new InternalServerErrorException("Cannot read Allegro token state");
     }
   }
 
-  private async saveAllegroProdTokenState(
-    state: AllegroProdTokenState,
+  private async saveAllegroProdAccountsState(
+    state: AllegroProdAccountsState,
   ): Promise<void> {
-    const tokenFilePath = this.getAllegroTokenFilePath();
-    const temporaryPath = `${tokenFilePath}.${process.pid}.tmp`;
-    await mkdir(dirname(tokenFilePath), { recursive: true, mode: 0o700 });
-    await writeFile(temporaryPath, JSON.stringify(state, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
+    const pendingWrite = this.allegroProdAccountsWrite.catch(() => undefined).then(async () => {
+      const tokenFilePath = this.getAllegroTokenFilePath();
+      const temporaryPath = `${tokenFilePath}.${process.pid}.${randomUUID()}.tmp`;
+      await mkdir(dirname(tokenFilePath), { recursive: true, mode: 0o700 });
+      await writeFile(temporaryPath, JSON.stringify(state, null, 2), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+      await rename(temporaryPath, tokenFilePath);
+      await chmod(tokenFilePath, 0o600);
     });
-    await rename(temporaryPath, tokenFilePath);
-    await chmod(tokenFilePath, 0o600);
+    this.allegroProdAccountsWrite = pendingWrite;
+    await pendingWrite;
+  }
+
+  private requireAllegroProdAccountsState(): AllegroProdAccountsState {
+    const state = this.allegroProdAccountsState;
+    if (!state || state.accounts.length === 0) {
+      throw new UnauthorizedException("Allegro authorization is required");
+    }
+    return state;
+  }
+
+  private normalizeAllegroProdAccountsState(
+    state: AllegroProdTokenState | AllegroProdAccountsState,
+  ): AllegroProdAccountsState | undefined {
+    if ("accounts" in state && Array.isArray(state.accounts)) {
+      const deduplicatedAccounts = new Map<string, Required<AllegroProdTokenState>>();
+      state.accounts
+        .filter((account) =>
+          typeof account.accessToken === "string"
+          && typeof account.accessTokenExpiresAt === "string"
+          && typeof account.refreshToken === "string"
+        )
+        .forEach((account, index) => {
+          const userName = typeof account.userName === "string" && account.userName.trim()
+            ? account.userName.trim()
+            : this.getJwtPayload(account.accessToken)?.user_name?.toString() ?? "";
+          const normalizedAccount: Required<AllegroProdTokenState> = {
+            id: typeof account.id === "string" && account.id.trim() ? account.id : randomUUID(),
+            label: typeof account.label === "string" && account.label.trim()
+            ? account.label.trim()
+            : `Konto Allegro ${index + 1}`,
+            userName,
+            accessToken: account.accessToken,
+            accessTokenExpiresAt: account.accessTokenExpiresAt,
+            refreshToken: account.refreshToken,
+            updatedAt: typeof account.updatedAt === "string" ? account.updatedAt : new Date().toISOString(),
+          };
+          const key = userName || normalizedAccount.id;
+          deduplicatedAccounts.set(key, normalizedAccount);
+        });
+      const accounts = [...deduplicatedAccounts.values()];
+
+      return {
+        activeAccountId: accounts.some((account) => account.id === state.activeAccountId)
+          ? state.activeAccountId
+          : accounts[0]?.id,
+        accounts,
+        updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : new Date().toISOString(),
+      };
+    }
+
+    const legacyState = state as AllegroProdTokenState;
+    if (
+      typeof legacyState.accessToken === "string"
+      && typeof legacyState.accessTokenExpiresAt === "string"
+      && typeof legacyState.refreshToken === "string"
+    ) {
+      const account: Required<AllegroProdTokenState> = {
+        id: typeof legacyState.id === "string" && legacyState.id.trim() ? legacyState.id : randomUUID(),
+        label: typeof legacyState.label === "string" && legacyState.label.trim() ? legacyState.label : "Konto zapisane",
+        userName: typeof legacyState.userName === "string" && legacyState.userName.trim()
+          ? legacyState.userName.trim()
+          : this.getJwtPayload(legacyState.accessToken)?.user_name?.toString() ?? "",
+        accessToken: legacyState.accessToken,
+        accessTokenExpiresAt: legacyState.accessTokenExpiresAt,
+        refreshToken: legacyState.refreshToken,
+        updatedAt: typeof legacyState.updatedAt === "string" ? legacyState.updatedAt : new Date().toISOString(),
+      };
+
+      return {
+        activeAccountId: account.id,
+        accounts: [account],
+        updatedAt: account.updatedAt,
+      };
+    }
+
+    return undefined;
   }
 
   private getAllegroTokenFilePath(): string {
@@ -386,13 +620,17 @@ export class AuthService {
   }
 
   private getJwtExpiration(token: string): string | undefined {
+    const payload = this.getJwtPayload(token);
+    return typeof payload?.exp === "number"
+      ? new Date(payload.exp * 1000).toISOString()
+      : undefined;
+  }
+
+  private getJwtPayload(token: string): Record<string, unknown> | undefined {
     try {
-      const payload = JSON.parse(
+      return JSON.parse(
         Buffer.from(token.split(".")[1], "base64url").toString("utf8"),
-      ) as { exp?: number };
-      return typeof payload.exp === "number"
-        ? new Date(payload.exp * 1000).toISOString()
-        : undefined;
+      ) as Record<string, unknown>;
     } catch {
       return undefined;
     }

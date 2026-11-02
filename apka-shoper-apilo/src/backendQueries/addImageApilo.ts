@@ -1,6 +1,5 @@
 import axios from "axios";
 import { API_URL } from "../config";
-import { toast } from "react-toastify";
 type AddProductProps = {
     authToken: string
 }
@@ -23,11 +22,10 @@ export const AddImageApilo = async (props: AddProductProps, selectedImages: File
                 }
             );
             apiloPhotos.push(apiloImageResponse.data.uuid);
-            toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
         }
         return apiloPhotos
     } catch (error) {
         console.error("Image upload error:", error);
-        toast.error("Błąd podczas dodawania zdjęcia do apilo");
+        throw error;
     }
 }

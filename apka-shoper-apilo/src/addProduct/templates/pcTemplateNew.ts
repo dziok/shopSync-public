@@ -1,4 +1,7 @@
 import { diskTypesDescriptions, ramTypesDescriptions } from "../additionalDescriptions/pcAdditionalDescription"
+import { renderAdditionalFeatureItems } from "../additionalFeatures";
+import { getAioStandDescription } from "../aioStand";
+import { isPcPortGroups, renderPcPortGridRows, type PcPortGroups } from "../pcPortGroups";
 
 
 export const pcTemplateNew = (
@@ -16,7 +19,7 @@ export const pcTemplateNew = (
     ramAmount: string,
     ramType: string,
     dvd: string,
-    ports: string[],
+    ports: string[] | PcPortGroups,
     additionalInfo: string,
     cpuTypesDescriptions: string,
     ramTypesDescriptions: string,
@@ -33,7 +36,9 @@ export const pcTemplateNew = (
     touchScreen: string,
     microphone: string,
     camera: string,
-    wifi: boolean
+    wifi: boolean,
+    extraFeatures = "",
+    aioStand = ""
 ) => `
 <div id="mainContainer" style="display: flex !important; align-items: center !important; flex-direction: column !important;">
 
@@ -45,7 +50,9 @@ export const pcTemplateNew = (
                 <h2 class="poleasingowe_h2">${title}</h2>
                 <div class="poleasingowe_text_container">
                                 ${system !== 'brak systemu'
-        ? `                    <p class="poleasingowe_p" > Komputer posiada oryginalny system ${system}
+        ? /home assistant/i.test(system)
+            ? `<p class="poleasingowe_p">Komputer ma zainstalowany system Home Assistant OS (HAOS), gotowy do dalszej konfiguracji przez użytkownika.</p>`
+            : `                    <p class="poleasingowe_p" > Komputer posiada oryginalny system ${system}
                         64bit w
                         polskiej wersji językowej, wraz z najnowszymi sterownikami oraz dodatkową przeglądarką
                         Internetową. po rozpakowaniu z pudełka jest gotowy do pracy<br></p>`
@@ -81,17 +88,16 @@ export const pcTemplateNew = (
 
                                         <div class="pc_spec_divider"></div>
 
-                                        <dt>Porty</dt>
-                                        <dd>
-                                            <div class="pc_spec_chips">
-                                            <div class="pc_spec_chips">
-                                            ${(ports ?? []).filter(Boolean).map(p => `<span class="pc_spec_chip">${p}</span>`).join('')}
-                                            </div>
-
-                                            </div>
-                                        </dd>
+                                        ${isPcPortGroups(ports)
+                                            ? renderPcPortGridRows(ports, {
+                                                casePorts: "Złącza obudowy",
+                                                motherboardPorts: "Złącza płyty głównej",
+                                                gpuPorts: "Złącza karty graficznej",
+                                            })
+                                            : ports?.length ? `<dt>Porty</dt><dd><div class="pc_spec_chips">${ports.filter(Boolean).map(p => `<span class="pc_spec_chip">${p}</span>`).join('')}</div></dd>` : ""}
                                     </dl>
                                 </div>
+                                ${extraFeatures.trim() ? `<div class="pc_extra_features"><h3 class="pc_spec_title">Dodatkowe cechy</h3><ul>${renderAdditionalFeatureItems(extraFeatures)}</ul></div>` : ""}
                 </div>
             </div>
         </div>
@@ -113,6 +119,7 @@ export const pcTemplateNew = (
 
                                     <!-- Dwukolumnowa lista definicji -->
                                     <dl class="pc_spec_grid">
+                                        ${getAioStandDescription(aioStand, 'pl') ? `<dt>Podstawka AIO</dt><dd>${getAioStandDescription(aioStand, 'pl')}</dd>` : ""}
                                         ${additionalInfo ? `
                                         <dt>Rozdzielczość</dt><dd>${resolution}</dd> ` : ""}
                                         <dt>Typ matrycy</dt><dd>${matrixType}</dd>
@@ -237,6 +244,28 @@ export const pcTemplateNew = (
             margin: 4px 0;
         }
 
+        .pc_extra_features {
+            border-top: 1px solid #eee;
+            margin-top: 16px;
+            padding-top: 16px;
+            color: #494949;
+        }
+
+        .pc_extra_features .pc_spec_title {
+            margin-bottom: 10px;
+        }
+
+        .pc_extra_features ul {
+            margin: 0;
+            padding-left: 22px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .pc_extra_features li + li {
+            margin-top: 6px;
+        }
+
         .pc_spec_chips {
             display: flex;
             flex-wrap: wrap;
@@ -290,6 +319,28 @@ export const pcTemplateNew = (
             line-height: 1.5;
             color: #494949;
             text-align: justify
+        }
+
+        .haos_notice {
+            width: 100%;
+            border-top: 1px solid #e3e3e3;
+            margin-top: 20px;
+            padding-top: 22px;
+        }
+
+        .haos_notice .poleasingowe_h3 {
+            font-weight: 600;
+            margin: 0 0 12px;
+        }
+
+        .haos_notice .poleasingowe_p2 {
+            text-align: left;
+            line-height: 1.6;
+            margin: 0 0 10px;
+        }
+
+        .haos_notice .poleasingowe_p2:last-child {
+            margin-bottom: 0;
         }
 
         .poleasingowe_ul {
@@ -443,6 +494,7 @@ export const PcApiloAioSpecyfication = (
     touchScreen: string,
     microphone: string,
     camera: string,
+    aioStand = "",
 ) => `                 
 <ul> <li> Rozdzielczość: <b>${resolution}</b></li>
 <li> Typ matrycy: <b>${matrixType} </b></li>
@@ -450,7 +502,8 @@ export const PcApiloAioSpecyfication = (
 <li> Częstotliwość odświerzania ekranu: <b>${Frequency} </b></li>
 <li> Ekran dotykowy: <b>${touchScreen ? "Tak" : "Nie"}</b></li>
 <li> Mikrofon: <b>${microphone ? "Tak" : "Nie"}</b></li>
-<li> Kamerka internetowa: <b>${camera ? "Tak" : "Nie"}</b></li></ul>
+<li> Kamerka internetowa: <b>${camera ? "Tak" : "Nie"}</b></li>
+${getAioStandDescription(aioStand, 'pl') ? `<li> Podstawka AIO: <b>${getAioStandDescription(aioStand, 'pl')}</b></li>` : ""}</ul>
 `
 
 export const ApiloDescription = (
@@ -549,7 +602,3 @@ export const allegroDescription = (
 </p>
 
 `
-
-
-
-

@@ -86,6 +86,7 @@ export interface ApiloLineSettings {
     active: boolean;
     sourceStatusId: number;
     targetStatusIds: number[];
+    targetNames?: Record<number, string>;
     targetLimits: Record<number, number>;
     deliveryMethodPriority: string[];
     maxLargeOrderItems: number;
@@ -411,6 +412,11 @@ export class ApiloSettingsService {
                 active: true,
                 sourceStatusId: 63,
                 targetStatusIds: [159, 156, 228],
+                targetNames: {
+                    159: 'Mateusz Sabała',
+                    156: 'Dariusz Sikora',
+                    228: 'Mateusz Jania',
+                },
                 targetLimits: { 159: 2, 156: 2, 228: 2 },
                 deliveryMethodPriority: [],
                 maxLargeOrderItems: 9,
@@ -438,6 +444,16 @@ export class ApiloSettingsService {
                 active: false,
                 sourceStatusId: 60,
                 targetStatusIds: [170, 173, 176, 179, 207, 182, 211, 201],
+                targetNames: {
+                    170: 'Bartek Irzyk Serwis',
+                    173: 'Andrzej Klimala Serwis',
+                    176: 'Hubert Przetocki Serwis',
+                    179: 'Kamil Rucki Serwis',
+                    207: 'Krzysztof Ulman Serwis',
+                    182: 'Kamil Spyrka Serwis',
+                    211: 'Alan Janosz Serwis',
+                    201: 'Status 201',
+                },
                 targetLimits: {
                     170: 2,
                     173: 2,
@@ -484,6 +500,7 @@ export class ApiloSettingsService {
                 active: !!line?.active,
                 sourceStatusId: Number(line?.sourceStatusId) || fallback.sourceStatusId,
                 targetStatusIds: this.normalizeIdList(line?.targetStatusIds),
+                targetNames: {},
                 targetLimits: {},
                 deliveryMethodPriority: Array.isArray(line?.deliveryMethodPriority)
                     ? line.deliveryMethodPriority.map((entry: any) => String(entry))
@@ -498,6 +515,26 @@ export class ApiloSettingsService {
                 normalized.targetStatusIds = [...fallback.targetStatusIds];
             }
 
+            const rawTargetNames = isPlainObject(line?.targetNames) ? line.targetNames : undefined;
+            const targetNameIds = Array.from(new Set([
+                ...normalized.targetStatusIds,
+                ...(rawTargetNames
+                    ? Object.keys(rawTargetNames)
+                    : Object.keys(fallback.targetNames ?? {})
+                ).map(Number).filter((id) => !Number.isNaN(id)),
+            ]));
+
+            for (const id of targetNameIds) {
+                const rawName = rawTargetNames?.[id] ?? rawTargetNames?.[String(id)];
+                const fallbackName = fallback.targetNames?.[id] ?? fallback.targetNames?.[String(id)];
+                normalized.targetNames![id] =
+                    typeof rawName === 'string' && rawName.trim()
+                        ? rawName.trim()
+                        : typeof fallbackName === 'string' && fallbackName.trim()
+                            ? fallbackName.trim()
+                            : `Status ${id}`;
+            }
+
             if (!Number.isFinite(normalized.maxLargeOrderItems)) {
                 normalized.maxLargeOrderItems = fallback.maxLargeOrderItems;
             }
@@ -510,14 +547,14 @@ export class ApiloSettingsService {
                     if (
                         !Number.isNaN(keyNum)
                         && Number.isFinite(valueNum)
-                        && normalized.targetStatusIds.includes(keyNum)
+                        && targetNameIds.includes(keyNum)
                     ) {
                         normalized.targetLimits[keyNum] = valueNum;
                     }
                 }
             }
 
-            for (const id of normalized.targetStatusIds) {
+            for (const id of targetNameIds) {
                 if (!(id in normalized.targetLimits)) {
                     normalized.targetLimits[id] = fallback.targetLimits?.[id] ?? 2;
                 }

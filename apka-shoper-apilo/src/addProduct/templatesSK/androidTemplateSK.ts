@@ -1,3 +1,5 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const AndroidTemplateSK = (
     additionalInfo: string,
     G5: boolean,
@@ -17,7 +19,7 @@ export const AndroidTemplateSK = (
     backCamera: string,
     frontCamera: string,
 
-) => `
+) => renderConditionalDescription(`
 
 <div style="display: flex; align-items: center; flex-direction: column; ">
 
@@ -309,9 +311,6 @@ Moderné zariadenia so systémom Android sú vybavené pokročilými bezpečnost
         * {
             font-family: "Poppins", serif;
             font-style: normal;
-        }
-        .false{
-        display: none !important
         }
         .phone_img_l {
             max-width: 220px !important;
@@ -701,4 +700,4 @@ Moderné zariadenia so systémom Android sú vybavené pokročilými bezpečnost
 
 </div>
 
-`
+`)

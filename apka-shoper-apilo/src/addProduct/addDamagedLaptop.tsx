@@ -7,12 +7,14 @@ import { Autocomplete, Box, Button, Checkbox, FormControl, FormControlLabel, Inp
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import { damagedLaptopTemplate } from "./templates/damagedLaptops";
 import { ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 type AddDamagedLaptopProps = {
     authToken: string,
@@ -50,9 +52,10 @@ interface IFormInput {
 function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     const [portsListString, setPortsListString] = useState("");
     const { register, handleSubmit, watch, setValue, control } = useForm<IFormInput>()
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const images = useProductImages();
+    const { selectedImages, imageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     // const [apiloImageUUIDS, setApiloImageUUIDS] = useState<string[]>([]);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [relatedPackId, setRelatedPackId] = useState("");
@@ -92,26 +95,6 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     };
 
 
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-
-        setSelectedImages(sortedFiles);
-    };
-
-    useEffect(() => {
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
-
     useEffect(() => {
         handleGetProductSafetyProducers({
             API_URL,
@@ -133,7 +116,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
         try {
             //dodaj zdjęcia do apilo
-            try {
+            if (addToApilo) try {
                 for (let i = 0; i < selectedImages.length; i++) {
                     const formData = new FormData();
                     formData.append("file", selectedImages[i]); // Dodajemy plik do formData
@@ -149,7 +132,6 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                         }
                     );
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
@@ -201,6 +183,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     Authorization: `Bearer ${props.authToken}`
                 }
             });
+            if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
                     sku: data.SKU.toUpperCase()
@@ -247,7 +230,10 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
-            toast.success("Produkt " + response.data + " został pomyślnie dodany.");
+            }
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -268,7 +254,6 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                             Authorization: `Bearer ${props.authToken}`
                         }
                     });
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane`);
                 } catch (error) {
                     console.error("Image upload error:", error);
                     toast.error("Błąd podczas dodawania zdjęcia");
@@ -279,10 +264,10 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error));
             }
 
         };
@@ -502,7 +487,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
 
                             <TextField label="SKU" {...register("SKU")} />
                             <TextField label="Ilość" type="number"{...register("stock")} />
-                            <TextField label="Cena" type="number"{...register("price")} />
+                            <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
                             <label >opis</label>
                             <textarea defaultValue={damagedLaptopTemplate('', '', '', '', '', '', '', '', '', '', '')}  {...register("description")} />
 
@@ -548,28 +533,12 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                             <TextField label="karta graficzna" variant="outlined" type="text"{...register("gpu")} />
                             <TextField label="opis stanu" variant="outlined" type="text"{...register("visualCondition")} />
 
-                            <label>Dodaj zdjęcia</label>
-                            <Button
-                                variant="contained"
-                                component="label"
-                            >
-                                Dodaj zdjęcia
-                                <input
-                                    style={{ width: '100%' }}
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    hidden
-                                />
-                            </Button>
-
-                            <Typography>
-                                {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                            </Typography>
+                            <ProductImageManager {...images} />
 
                             <Button variant="outlined" type="reset"  >Reset formularza</Button>
-                            <Button variant="contained" type="submit" >Dodaj</Button>
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                            </ApiloSubmitControls>
                         </ThemeProvider>
                     </Box>
                 </form>

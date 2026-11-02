@@ -184,6 +184,7 @@ export const LaptopAttributeForm: React.FC<AttributeFormProps> = React.memo(({
             control={control}
             render={({ field }) => (
               <Select
+                name={field.name}
                 labelId={`select-${attribute.attribute_id}-label`}
                 id={`select-${attribute.attribute_id}`}
                 label={attribute.name}
@@ -266,6 +267,7 @@ export const LaptopAttributeForm: React.FC<AttributeFormProps> = React.memo(({
             <FormControlLabel
               control={
                 <Checkbox
+                  name={field.name}
                   checked={!!field.value}
                   onChange={(e) => field.onChange(e.target.checked)}
                   onBlur={field.onBlur}

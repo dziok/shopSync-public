@@ -8,5 +8,6 @@ import { CloudinaryService } from './cloudinary-service';
     imports: [ConfigModule.forRoot(), HttpModule], // ← WAŻNE!
     controllers: [CloudinaryController],
     providers: [CloudinaryService],
+    exports: [CloudinaryService],
 })
 export class CloudinaryModule { }

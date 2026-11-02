@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./addProducts.css";
 import 'setimmediate';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import {
     TextField,
     Button,
@@ -33,6 +33,8 @@ import { handleGetProductSafetyProducers } from "../backendQueries/getProductSaf
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 type AddProductProps = {
     authToken: string;
@@ -93,7 +95,9 @@ function AddCustomProduct(props: AddProductProps) {
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
     const { register, handleSubmit, setValue, control } = useForm<IFormInput>();
     const [descriptionValue, setDescriptionValue] = useState<string>('');
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const images = useProductImages();
+    const { selectedImages, imageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     const [editorState, setEditorState] = useState(EditorState.createEmpty());
     const [categories, setCategories] = useState<CategoryResource[]>([]);
     const [producers, setProducers] = useState<ProducersResource[]>([]);
@@ -101,7 +105,6 @@ function AddCustomProduct(props: AddProductProps) {
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [relatedPackId, setRelatedPackId] = useState("");
     const [attributeGroup, setAttributeGroup] = useState<any>(null);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [producer, setProducer] = useState<ProducersResource[]>([]);
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
@@ -192,27 +195,6 @@ function AddCustomProduct(props: AddProductProps) {
         setEditorState(editorState);
         setDescriptionValue(draftToHtml(convertToRaw(editorState.getCurrentContent())));
     };
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-
-        setSelectedImages(sortedFiles);
-    };
-
-
-    useEffect(() => {
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
 
     const handleGetProducers = async () => {
         let allProducers: ProducersResource[] = [];
@@ -342,7 +324,7 @@ function AddCustomProduct(props: AddProductProps) {
             setLoading(true);
 
             // Dodaj zdjęcia do apilo
-            try {
+            if (addToApilo) try {
                 for (let i = 0; i < selectedImages.length; i++) {
                     const formData = new FormData();
                     formData.append("file", selectedImages[i]);
@@ -358,7 +340,6 @@ function AddCustomProduct(props: AddProductProps) {
                         }
                     );
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
@@ -449,9 +430,10 @@ function AddCustomProduct(props: AddProductProps) {
                 );
             } catch (error) {
                 console.error("Błąd podczas dodawania produktu do Shopera:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu do Shopera.");
+                toast.error(getShoperErrorMessage(error, attributeList));
                 return;
             }
+            if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
                     sku: data.SKU.toUpperCase()
@@ -501,7 +483,10 @@ function AddCustomProduct(props: AddProductProps) {
                 }
             );
 
-            toast.success("Produkt " + response.data + " został pomyślnie dodany.");
+            }
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
 
 
             // Dodawanie zdjęć produktu
@@ -524,7 +509,6 @@ function AddCustomProduct(props: AddProductProps) {
                             Authorization: `Bearer ${props.authToken}`
                         }
                     });
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane`);
                 } catch (error) {
                     console.error("Image upload error:", error);
                     toast.error("Błąd podczas dodawania zdjęcia");
@@ -535,10 +519,10 @@ function AddCustomProduct(props: AddProductProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error, attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error, attributeList));
             }
         } finally {
             setLoading(false);
@@ -570,7 +554,7 @@ function AddCustomProduct(props: AddProductProps) {
                         })} />
                         <TextField required label="SKU" {...register("SKU")} />
                         <TextField required label="Ilość" type="number"{...register("stock")} />
-                        <TextField required label="Cena" type="number"{...register("price")} />
+                        <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
 
                         <FormControl fullWidth>
                             <InputLabel>Gabaryt</InputLabel>
@@ -772,27 +756,10 @@ function AddCustomProduct(props: AddProductProps) {
                             return null;
                         })}
 
-                        <Button
-                            variant="contained"
-                            component="label"
-                        >
-                            Dodaj zdjęcia
-                            <input
-                                style={{ width: '100%' }}
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                hidden
-                            />
-                        </Button>
-
-                        <Typography>
-                            {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                        </Typography>
-                        <Button variant="contained" type="submit">
-                            Dodaj
-                        </Button>
+                        <ProductImageManager {...images} />
+                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                            <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                        </ApiloSubmitControls>
                     </ThemeProvider>
                 </Box>
             </form>

@@ -1,0 +1,34 @@
+.chatgpt-feed { max-width: 1100px; margin: 0 auto 36px; padding: 16px 20px 30px; color: #f2f2f2; text-align: left; }
+.chatgpt-feed__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid #484848; padding-bottom: 16px; }
+.chatgpt-feed h2 { margin: 0; font-size: 1.4rem; }
+.chatgpt-feed h3 { margin: 26px 0 10px; font-size: 1rem; }
+.chatgpt-feed__header p, .chatgpt-feed__source, .chatgpt-feed__note { color: #bdbdbd; font-size: .88rem; }
+.chatgpt-feed__header p { margin: 5px 0 0; }
+.chatgpt-feed__source { overflow-wrap: anywhere; }
+.chatgpt-feed__source a { color: #9bcdf5; }
+.chatgpt-feed__public-link { margin: 16px 0; padding: 14px 0; border-top: 1px solid #333; }
+.chatgpt-feed__public-link label { display: block; margin-bottom: 8px; font-size: .88rem; font-weight: 600; }
+.chatgpt-feed__public-link-row { display: flex; gap: 8px; }
+.chatgpt-feed__public-link input { min-width: 0; flex: 1; padding: 9px 10px; background: #272727; color: #eee; border: 1px solid #555; border-radius: 4px; }
+.chatgpt-feed__public-link button { padding: 9px 13px; background: #333; color: #fff; border: 1px solid #777; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.chatgpt-feed__public-link button:disabled { cursor: default; opacity: .5; }
+.chatgpt-feed__public-link p { margin: 8px 0 0; color: #bdbdbd; font-size: .84rem; }
+.chatgpt-feed__public-link p.chatgpt-feed__error { color: #ff9a92; }
+.chatgpt-feed__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chatgpt-feed__actions button { background: #3c743c; border: 1px solid #3c743c; border-radius: 6px; color: white; cursor: pointer; font-weight: 600; padding: 9px 14px; white-space: nowrap; }
+.chatgpt-feed__actions button.chatgpt-feed__secondary { background: transparent; border-color: #777; }
+.chatgpt-feed__actions button:disabled { cursor: default; opacity: .5; }
+.chatgpt-feed__stats { display: flex; gap: 24px; flex-wrap: wrap; padding: 16px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; }
+.chatgpt-feed__stats span { color: #bdbdbd; }
+.chatgpt-feed__stats strong { color: white; margin-left: 8px; }
+.chatgpt-feed__reasons { padding: 12px 0; border-bottom: 1px solid #333; }
+.chatgpt-feed__reasons summary { cursor: pointer; color: #e7c483; }
+.chatgpt-feed__reasons ul { max-width: 500px; list-style: none; padding: 0; margin: 12px 0 0; }
+.chatgpt-feed__reasons li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.chatgpt-feed__table-wrap { overflow-x: auto; }
+.chatgpt-feed table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.chatgpt-feed th, .chatgpt-feed td { border-bottom: 1px solid #444; padding: 9px 10px; text-align: left; vertical-align: top; }
+.chatgpt-feed th { color: #bdbdbd; font-size: .8rem; font-weight: 600; }
+.chatgpt-feed td { font-size: .85rem; }
+.chatgpt-feed__note { border-top: 1px solid #484848; margin-top: 28px; padding-top: 12px; }
+@media (max-width: 650px) { .chatgpt-feed__header { display: block; } .chatgpt-feed__actions { margin-top: 16px; } .chatgpt-feed__public-link-row { flex-wrap: wrap; } .chatgpt-feed__public-link input { flex-basis: 100%; } }

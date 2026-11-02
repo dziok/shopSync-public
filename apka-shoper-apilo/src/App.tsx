@@ -4,6 +4,7 @@ import Login from './login/login';
 import CategorySelection from './categorySelection';
 import { useLoginSubmit } from './login/login.hooks';
 import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   const [isLogged, setIsLogged] = useState(false)
@@ -35,7 +36,8 @@ function App() {
             setAuthToken={setAuthToken}
             setIsLogged={setIsLogged} />)
       }
-      <ToastContainer />
+      <ToastContainer position="top-right" autoClose={5500} limit={3} newestOnTop
+        pauseOnHover closeOnClick={false} theme="dark" className="app-toasts" />
 
     </>
   );

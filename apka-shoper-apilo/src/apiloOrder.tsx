@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API_URL } from "./config";
 import { toast } from "react-toastify";
+import { getApiErrorMessage } from "./backendQueries/apiErrorMessage";
 
 import {
     Box,
@@ -9,6 +10,7 @@ import {
     CardContent,
     CardHeader,
     Checkbox,
+    Collapse,
     Container,
     Divider,
     FormControl,
@@ -49,6 +51,7 @@ type OrderRow = {
 };
 
 type LimitsMap = Record<number, number>;
+type TargetNamesMap = Record<number, string>;
 type RotationDayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type RotationDayMode = "fixed" | "drop_one";
 type RotationDayConfig = {
@@ -102,6 +105,60 @@ const getCurrentMonthString = () => {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     return `${year}-${month}`;
+};
+
+const DEFAULT_LINE1_NAMES: TargetNamesMap = {
+    159: "Mateusz Sabała",
+    156: "Dariusz Sikora",
+    228: "Mateusz Jania",
+};
+
+const DEFAULT_LINE2_NAMES: TargetNamesMap = {
+    170: "Bartek Irzyk Serwis",
+    173: "Andrzej Klimala Serwis",
+    176: "Hubert Przetocki Serwis",
+    179: "Kamil Rucki Serwis",
+    207: "Krzysztof Ulman Serwis",
+    182: "Kamil Spyrka Serwis",
+    211: "Alan Janosz Serwis",
+    201: "Status 201",
+};
+
+const normalizeTargetIds = (value: any): number[] => Array.isArray(value)
+    ? value.map((entry: any) => Number(entry)).filter((entry: number) => !Number.isNaN(entry))
+    : [];
+
+const normalizeTargetNames = (raw: any, fallback: TargetNamesMap, targetIds: number[]): TargetNamesMap => {
+    const names: TargetNamesMap = {};
+    const rawNames = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const allIds = Array.from(new Set([
+        ...targetIds,
+        ...Object.keys(fallback).map(Number).filter((id) => !Number.isNaN(id)),
+        ...Object.keys(rawNames).map(Number).filter((id) => !Number.isNaN(id)),
+    ]));
+
+    for (const id of allIds) {
+        const rawName = rawNames[id] ?? rawNames[String(id)];
+        names[id] = typeof rawName === "string" && rawName.trim()
+            ? rawName.trim()
+            : fallback[id] || `Status ${id}`;
+    }
+
+    return names;
+};
+
+const buildTargetIdsAll = (selectedIds: number[], targetNames: TargetNamesMap, limits: LimitsMap): number[] => {
+    const ids = new Set<number>();
+    selectedIds.forEach((id) => ids.add(id));
+    Object.keys(targetNames).forEach((key) => {
+        const id = Number(key);
+        if (!Number.isNaN(id)) ids.add(id);
+    });
+    Object.keys(limits).forEach((key) => {
+        const id = Number(key);
+        if (!Number.isNaN(id)) ids.add(id);
+    });
+    return Array.from(ids);
 };
 
 const createDefaultMonthlyComputerAssignment = (targetIds: number[]): MonthlyComputerAssignment => ({
@@ -289,9 +346,16 @@ type LineProps = {
     setActive: (v: boolean) => void;
 
     targetIdsAll: number[];
-    targetNames: Record<number, string>;
+    targetNames: TargetNamesMap;
     selectedTargetIds: number[];
     toggleTarget: (id: number, checked: boolean) => void;
+    setTargetName: (id: number, value: string) => void;
+    removeTarget: (id: number) => void;
+    newTargetId: string;
+    setNewTargetId: (value: string) => void;
+    newTargetName: string;
+    setNewTargetName: (value: string) => void;
+    addTarget: () => void;
 
     limits: LimitsMap;
     setLimit: (id: number, v: string) => void;
@@ -431,6 +495,13 @@ const LineCard: React.FC<LineProps> = ({
     targetNames,
     selectedTargetIds,
     toggleTarget,
+    setTargetName,
+    removeTarget,
+    newTargetId,
+    setNewTargetId,
+    newTargetName,
+    setNewTargetName,
+    addTarget,
     limits,
     setLimit,
     maxLargeLabel,
@@ -477,6 +548,7 @@ const LineCard: React.FC<LineProps> = ({
     const monthlyStatsMonth = selectedMonth ?? currentMonth ?? getCurrentMonthString();
     const monthlyCounts = monthlyComputerAssignment?.monthlyCounts?.[monthlyStatsMonth] ?? {};
     const canEditManualMonth = !!monthlyComputerAssignment && monthlyStatsMonth === currentMonth;
+    const [targetsManagementOpen, setTargetsManagementOpen] = useState(false);
 
     const moveUp = (index: number) => {
         if (index <= 0) return;
@@ -548,9 +620,18 @@ const LineCard: React.FC<LineProps> = ({
                 <Stack spacing={2}>
                     {/* Zakładki docelowe */}
                     <Box>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                            {monthlyComputerAssignment ? "Zakładki docelowe" : "Zakładki docelowe i limity"}
-                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                Zakładki docelowe i limity
+                            </Typography>
+                            <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => setTargetsManagementOpen((prev) => !prev)}
+                            >
+                                {targetsManagementOpen ? "Zamknij" : "Zarządzaj"}
+                            </Button>
+                        </Stack>
 
                         <Stack spacing={1}>
                             {targetIdsAll.map((id) => {
@@ -559,55 +640,123 @@ const LineCard: React.FC<LineProps> = ({
                                     <Paper
                                         key={id}
                                         variant="outlined"
-                                        sx={{
-                                            p: 1,
-                                            opacity: disabled ? 0.6 : 1,
-                                        }}
+                                        sx={{ p: 1 }}
                                     >
-                                        <Grid container spacing={1} alignItems="center">
-                                            <Grid item xs={12} md={monthlyComputerAssignment ? 12 : 7}>
-                                                <FormControlLabel
-                                                    control={
-                                                        <Checkbox
-                                                            checked={checked}
-                                                            disabled={disabled}
-                                                            onChange={(e) => toggleTarget(id, e.target.checked)}
-                                                        />
-                                                    }
-                                                    label={
-                                                        <Stack direction="row" spacing={1} alignItems="center">
-                                                            <Typography sx={{ fontWeight: 600 }}>
-                                                                {targetNames[id] || `Status ${id}`}
-                                                            </Typography>
-                                                            <Chip
-                                                                size="small"
-                                                                variant="outlined"
-                                                                label={`ID: ${id}`}
-                                                            />
-                                                        </Stack>
-                                                    }
-                                                />
-                                            </Grid>
-
-                                            {!monthlyComputerAssignment && (
-                                                <Grid item xs={12} md={5}>
-                                                    <TextField
-                                                        size="small"
-                                                        type="number"
-                                                        label="Limit w zakładce"
-                                                        value={limits[id] ?? 0}
-                                                        disabled={disabled}
-                                                        onChange={(e) => setLimit(id, e.target.value)}
-                                                        inputProps={{ min: 0 }}
-                                                        fullWidth
+                                        <Stack
+                                            direction={{ xs: "column", sm: "row" }}
+                                            spacing={1}
+                                            alignItems={{ xs: "stretch", sm: "center" }}
+                                            justifyContent="space-between"
+                                        >
+                                            <FormControlLabel
+                                                control={
+                                                    <Checkbox
+                                                        checked={checked}
+                                                        onChange={(e) => toggleTarget(id, e.target.checked)}
                                                     />
-                                                </Grid>
-                                            )}
-                                        </Grid>
+                                                }
+                                                label={
+                                                    <Typography sx={{ fontWeight: 600 }}>
+                                                        {targetNames[id] || `Status ${id}`}
+                                                    </Typography>
+                                                }
+                                                sx={{ flex: 1, minWidth: 0 }}
+                                            />
+
+                                            <TextField
+                                                size="small"
+                                                type="number"
+                                                label="Limit"
+                                                value={limits[id] ?? 0}
+                                                onChange={(e) => setLimit(id, e.target.value)}
+                                                inputProps={{ min: 0, style: { textAlign: "right" } }}
+                                                sx={{ width: { xs: "100%", sm: 110 }, flexShrink: 0 }}
+                                            />
+                                        </Stack>
                                     </Paper>
                                 );
                             })}
                         </Stack>
+
+                        <Collapse in={targetsManagementOpen} unmountOnExit>
+                            <Paper variant="outlined" sx={{ p: 1, mt: 1 }}>
+                                <Stack spacing={1}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                        Edycja nazw i ID
+                                    </Typography>
+                                    {targetIdsAll.map((id) => (
+                                        <Grid key={id} container spacing={1} alignItems="center">
+                                            <Grid item xs={12} md={5}>
+                                                <TextField
+                                                    size="small"
+                                                    label="Nazwa użytkownika"
+                                                    value={targetNames[id] || ""}
+                                                    onChange={(e) => setTargetName(id, e.target.value)}
+                                                    fullWidth
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} md={4}>
+                                                <TextField
+                                                    size="small"
+                                                    label="ID zakładki"
+                                                    value={id}
+                                                    disabled
+                                                    fullWidth
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} md={3}>
+                                                <Button
+                                                    size="small"
+                                                    variant="text"
+                                                    color="error"
+                                                    onClick={() => removeTarget(id)}
+                                                    fullWidth
+                                                >
+                                                    Usuń
+                                                </Button>
+                                            </Grid>
+                                        </Grid>
+                                    ))}
+
+                                    <Divider />
+
+                                    <Grid container spacing={1} alignItems="center">
+                                        <Grid item xs={12} md={4}>
+                                            <TextField
+                                                size="small"
+                                                type="number"
+                                                label="ID zakładki"
+                                                value={newTargetId}
+                                                onChange={(e) => setNewTargetId(e.target.value)}
+                                                inputProps={{ min: 1 }}
+                                                fullWidth
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} md={5}>
+                                            <TextField
+                                                size="small"
+                                                label="Nazwa użytkownika"
+                                                value={newTargetName}
+                                                onChange={(e) => setNewTargetName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") addTarget();
+                                                }}
+                                                fullWidth
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} md={3}>
+                                            <Button
+                                                variant="outlined"
+                                                onClick={addTarget}
+                                                fullWidth
+                                            >
+                                                Dodaj
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
+                                </Stack>
+                            </Paper>
+                        </Collapse>
                     </Box>
                     <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
@@ -1144,21 +1293,27 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
     const [line1Active, setLine1Active] = useState(true);
     const [line1SourceStatusId, setLine1SourceStatusId] = useState(63);
     const [line1TargetStatusIds, setLine1TargetStatusIds] = useState<number[]>([159, 156, 228]);
+    const [line1Names, setLine1Names] = useState<TargetNamesMap>(DEFAULT_LINE1_NAMES);
     const [line1TargetLimits, setLine1TargetLimits] = useState<LimitsMap>({ 159: 2, 156: 2, 228: 2 });
     const [line1MaxLarge, setLine1MaxLarge] = useState(9);
     const [line1Methods, setLine1Methods] = useState<string[]>([]);
     const [newMethod1, setNewMethod1] = useState("");
+    const [newLine1TargetId, setNewLine1TargetId] = useState("");
+    const [newLine1TargetName, setNewLine1TargetName] = useState("");
 
     // L2
     const [line2Active, setLine2Active] = useState(false);
     const [line2SourceStatusId, setLine2SourceStatusId] = useState(60);
     const [line2TargetStatusIds, setLine2TargetStatusIds] = useState<number[]>([170, 173, 176, 179, 207, 182, 211]);
+    const [line2Names, setLine2Names] = useState<TargetNamesMap>(DEFAULT_LINE2_NAMES);
     const [line2TargetLimits, setLine2TargetLimits] = useState<LimitsMap>({
         170: 2, 173: 2, 176: 2, 179: 2, 207: 2, 182: 2, 211: 2
     });
     const [line2MaxLarge, setLine2MaxLarge] = useState(9);
     const [line2Methods, setLine2Methods] = useState<string[]>([]);
     const [newMethod2, setNewMethod2] = useState("");
+    const [newLine2TargetId, setNewLine2TargetId] = useState("");
+    const [newLine2TargetName, setNewLine2TargetName] = useState("");
 
     // Wyniki / loading
     const [line1Orders, setLine1Orders] = useState<OrderRow[]>([]);
@@ -1167,24 +1322,14 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
     const [loading1, setLoading1] = useState(false);
     const [loading2, setLoading2] = useState(false);
 
-    const line1Names: Record<number, string> = useMemo(() => ({
-        159: "Mateusz Sabała",
-        156: "Dariusz Sikora",
-        228: "Mateusz Jania",
-    }), []);
-
-    const line2Names: Record<number, string> = useMemo(() => ({
-        170: "Bartek Irzyk Serwis",
-        173: "Andrzej Klimala Serwis",
-        176: "Hubert Przetocki Serwis",
-        179: "Kamil Rucki Serwis",
-        207: "Krzysztof Ulman Serwis",
-        182: "Kamil Spyrka Serwis",
-        211: "Alan Janosz Serwis",
-    }), []);
-
-    const line1TargetsAll = useMemo(() => [159, 156, 228], []);
-    const line2TargetsAll = useMemo(() => [170, 173, 176, 179, 207, 182, 211], []);
+    const line1TargetsAll = useMemo(
+        () => buildTargetIdsAll(line1TargetStatusIds, line1Names, line1TargetLimits),
+        [line1Names, line1TargetLimits, line1TargetStatusIds],
+    );
+    const line2TargetsAll = useMemo(
+        () => buildTargetIdsAll(line2TargetStatusIds, line2Names, line2TargetLimits),
+        [line2Names, line2TargetLimits, line2TargetStatusIds],
+    );
     const [serverSnapshot, setServerSnapshot] = useState<any | null>(null);
     const [serverRevision, setServerRevision] = useState<number | null>(null);
 
@@ -1203,7 +1348,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                 .filter((x: number) => !Number.isNaN(x) && targetIds.includes(x))
             : fallbackParticipants.filter((id: number) => targetIds.includes(id));
 
-        return line1TargetsAll.filter((id) => participants.includes(id));
+        return targetIds.filter((id) => participants.includes(id));
     };
 
     const updateLine1RotationParticipants = (ids: number[]) => {
@@ -1285,9 +1430,9 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                 const data = res.data;
 
                 if (data?.line1 && data?.line2) {
-                    const targetIds1: number[] = Array.isArray(data.line1.targetStatusIds)
-                        ? data.line1.targetStatusIds.map((x: any) => Number(x)).filter((x: number) => !Number.isNaN(x))
-                        : [];
+                    const targetIds1 = normalizeTargetIds(data.line1.targetStatusIds);
+                    const names1 = normalizeTargetNames(data.line1.targetNames, DEFAULT_LINE1_NAMES, targetIds1);
+                    const allIds1 = buildTargetIdsAll(targetIds1, names1, data.line1.targetLimits || {});
 
                     setLine1SchedEnabled(!!data.line1?.autoSchedule?.enabled);
                     setLine1EnableAt(data.line1?.autoSchedule?.enableAt || "08:00");
@@ -1307,7 +1452,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                             : getTodayDateString(),
                     );
                     setLine1MonthlyComputerAssignment(
-                        normalizeMonthlyComputerAssignment(data.line1?.monthlyComputerAssignment, line1TargetsAll),
+                        normalizeMonthlyComputerAssignment(data.line1?.monthlyComputerAssignment, allIds1),
                     );
 
                     setLine2SchedEnabled(!!data.line2?.autoSchedule?.enabled);
@@ -1318,10 +1463,11 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                     // line1
                     setLine1Active(!!data.line1.active);
                     setLine1SourceStatusId(Number(data.line1.sourceStatusId) || 63);
+                    setLine1Names(names1);
                     setLine1TargetStatusIds(targetIds1);
 
                     const limits1: LimitsMap = {};
-                    for (const id of line1TargetsAll) {
+                    for (const id of allIds1) {
                         limits1[id] =
                             data.line1.targetLimits && data.line1.targetLimits[id] !== undefined
                                 ? Number(data.line1.targetLimits[id])
@@ -1336,13 +1482,14 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                     setLine2Active(!!data.line2.active);
                     setLine2SourceStatusId(Number(data.line2.sourceStatusId) || 60);
 
-                    const targetIds2: number[] = Array.isArray(data.line2.targetStatusIds)
-                        ? data.line2.targetStatusIds.map((x: any) => Number(x)).filter((x: number) => !Number.isNaN(x))
-                        : [];
+                    const targetIds2 = normalizeTargetIds(data.line2.targetStatusIds);
+                    const names2 = normalizeTargetNames(data.line2.targetNames, DEFAULT_LINE2_NAMES, targetIds2);
+                    const allIds2 = buildTargetIdsAll(targetIds2, names2, data.line2.targetLimits || {});
+                    setLine2Names(names2);
                     setLine2TargetStatusIds(targetIds2);
 
                     const limits2: LimitsMap = {};
-                    for (const id of line2TargetsAll) {
+                    for (const id of allIds2) {
                         limits2[id] =
                             data.line2.targetLimits && data.line2.targetLimits[id] !== undefined
                                 ? Number(data.line2.targetLimits[id])
@@ -1365,13 +1512,14 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
         };
 
         if (authToken) fetchSettings();
-    }, [authToken, line1TargetsAll, line2TargetsAll]);
+    }, [authToken]);
 
     const buildCurrentSettings = () => ({
         line1: {
             active: line1Active,
             sourceStatusId: line1SourceStatusId,
             targetStatusIds: line1TargetStatusIds,
+            targetNames: line1Names,
             targetLimits: line1TargetLimits,
             deliveryMethodPriority: line1Methods,
             maxLargeOrderItems: line1MaxLarge,
@@ -1399,6 +1547,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             active: line2Active,
             sourceStatusId: line2SourceStatusId,
             targetStatusIds: line2TargetStatusIds,
+            targetNames: line2Names,
             targetLimits: line2TargetLimits,
             deliveryMethodPriority: line2Methods,
             maxLargeOrderItems: line2MaxLarge,
@@ -1440,6 +1589,14 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             const saved = res.data;
             setServerRevision(Number(saved.revision));
             setServerSnapshot({ line1: saved.line1, line2: saved.line2 });
+            {
+                const savedTargetIds1 = normalizeTargetIds(saved.line1.targetStatusIds);
+                const savedTargetIds2 = normalizeTargetIds(saved.line2.targetStatusIds);
+                setLine1Names(normalizeTargetNames(saved.line1.targetNames, DEFAULT_LINE1_NAMES, savedTargetIds1));
+                setLine2Names(normalizeTargetNames(saved.line2.targetNames, DEFAULT_LINE2_NAMES, savedTargetIds2));
+                setLine1TargetLimits(saved.line1.targetLimits || {});
+                setLine2TargetLimits(saved.line2.targetLimits || {});
+            }
             toast.success("Zapisano tylko wprowadzone zmiany");
         } catch (err: any) {
             // konflikt wersji (ktoś zapisał w międzyczasie)
@@ -1498,15 +1655,23 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
 
                     setLine1Active(!!saved2.line1.active);
                     setLine1SourceStatusId(Number(saved2.line1.sourceStatusId) || 63);
-                    setLine1TargetStatusIds(Array.isArray(saved2.line1.targetStatusIds) ? saved2.line1.targetStatusIds.map(Number) : []);
-                    setLine1TargetLimits(saved2.line1.targetLimits || {});
+                    {
+                        const savedTargetIds1 = normalizeTargetIds(saved2.line1.targetStatusIds);
+                        setLine1TargetStatusIds(savedTargetIds1);
+                        setLine1Names(normalizeTargetNames(saved2.line1.targetNames, DEFAULT_LINE1_NAMES, savedTargetIds1));
+                        setLine1TargetLimits(saved2.line1.targetLimits || {});
+                    }
                     setLine1MaxLarge(Number(saved2.line1.maxLargeOrderItems) || 9);
                     setLine1Methods(Array.isArray(saved2.line1.deliveryMethodPriority) ? saved2.line1.deliveryMethodPriority.map(String) : []);
 
                     setLine2Active(!!saved2.line2.active);
                     setLine2SourceStatusId(Number(saved2.line2.sourceStatusId) || 60);
-                    setLine2TargetStatusIds(Array.isArray(saved2.line2.targetStatusIds) ? saved2.line2.targetStatusIds.map(Number) : []);
-                    setLine2TargetLimits(saved2.line2.targetLimits || {});
+                    {
+                        const savedTargetIds2 = normalizeTargetIds(saved2.line2.targetStatusIds);
+                        setLine2TargetStatusIds(savedTargetIds2);
+                        setLine2Names(normalizeTargetNames(saved2.line2.targetNames, DEFAULT_LINE2_NAMES, savedTargetIds2));
+                        setLine2TargetLimits(saved2.line2.targetLimits || {});
+                    }
                     setLine2MaxLarge(Number(saved2.line2.maxLargeOrderItems) || 9);
                     setLine2Methods(Array.isArray(saved2.line2.deliveryMethodPriority) ? saved2.line2.deliveryMethodPriority.map(String) : []);
 
@@ -1529,7 +1694,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             }
 
             console.error("Błąd zapisu ustawień:", err.response?.data || err);
-            toast.error("Błąd zapisu: " + JSON.stringify(err.response?.data || err));
+            toast.error(getApiErrorMessage(err, "Nie udało się zapisać ustawień."));
         }
     };
 
@@ -1574,12 +1739,84 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
         setLine1TargetLimits((prev) => ({ ...prev, [id]: Number.isNaN(num) ? prev[id] : num }));
     };
 
+    const setLine1TargetName = (id: number, value: string) => {
+        setLine1Names((prev) => ({ ...prev, [id]: value }));
+    };
+
+    const removeLine1Target = (id: number) => {
+        toggleLine1Target(id, false);
+        setLine1Names((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setLine1TargetLimits((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+    };
+
+    const addLine1Target = () => {
+        const id = Number(newLine1TargetId);
+        const name = newLine1TargetName.trim();
+        if (!Number.isInteger(id) || id <= 0) {
+            toast.error("Podaj poprawne ID zakładki dla linii 1.");
+            return;
+        }
+        if (line1TargetsAll.includes(id)) {
+            toast.error("Taka zakładka już istnieje w linii 1.");
+            return;
+        }
+        setLine1Names((prev) => ({ ...prev, [id]: name || `Status ${id}` }));
+        setLine1TargetLimits((prev) => ({ ...prev, [id]: 2 }));
+        toggleLine1Target(id, true);
+        setNewLine1TargetId("");
+        setNewLine1TargetName("");
+    };
+
     const toggleLine2Target = (id: number, checked: boolean) => {
         setLine2TargetStatusIds((prev) => (checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id)));
     };
     const changeLine2Limit = (id: number, value: string) => {
         const num = Number(value);
         setLine2TargetLimits((prev) => ({ ...prev, [id]: Number.isNaN(num) ? prev[id] : num }));
+    };
+
+    const setLine2TargetName = (id: number, value: string) => {
+        setLine2Names((prev) => ({ ...prev, [id]: value }));
+    };
+
+    const removeLine2Target = (id: number) => {
+        toggleLine2Target(id, false);
+        setLine2Names((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setLine2TargetLimits((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+    };
+
+    const addLine2Target = () => {
+        const id = Number(newLine2TargetId);
+        const name = newLine2TargetName.trim();
+        if (!Number.isInteger(id) || id <= 0) {
+            toast.error("Podaj poprawne ID zakładki dla linii 2.");
+            return;
+        }
+        if (line2TargetsAll.includes(id)) {
+            toast.error("Taka zakładka już istnieje w linii 2.");
+            return;
+        }
+        setLine2Names((prev) => ({ ...prev, [id]: name || `Status ${id}` }));
+        setLine2TargetLimits((prev) => ({ ...prev, [id]: 2 }));
+        toggleLine2Target(id, true);
+        setNewLine2TargetId("");
+        setNewLine2TargetName("");
     };
 
     const handleAssignLine1 = async () => {
@@ -1599,7 +1836,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             toast.success("Linia 1: przydział wykonany");
         } catch (err: any) {
             console.error("Błąd przydziału zamówień (linia 1):", err.response?.data || err);
-            toast.error(JSON.stringify(err.response?.data || err));
+            toast.error(getApiErrorMessage(err, "Nie udało się przydzielić zamówień w linii 1."));
         } finally {
             setLoading1(false);
         }
@@ -1615,7 +1852,7 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             toast.success("Linia 2: przydział wykonany");
         } catch (err: any) {
             console.error("Błąd przydziału zamówień (linia 2):", err.response?.data || err);
-            toast.error(JSON.stringify(err.response?.data || err));
+            toast.error(getApiErrorMessage(err, "Nie udało się przydzielić zamówień w linii 2."));
         } finally {
             setLoading2(false);
         }
@@ -1659,6 +1896,13 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                             targetNames={line1Names}
                             selectedTargetIds={line1TargetStatusIds}
                             toggleTarget={toggleLine1Target}
+                            setTargetName={setLine1TargetName}
+                            removeTarget={removeLine1Target}
+                            newTargetId={newLine1TargetId}
+                            setNewTargetId={setNewLine1TargetId}
+                            newTargetName={newLine1TargetName}
+                            setNewTargetName={setNewLine1TargetName}
+                            addTarget={addLine1Target}
                             limits={line1TargetLimits}
                             setLimit={changeLine1Limit}
                             maxLargeLabel="Limit dużego zamówienia (komputery)"
@@ -1711,6 +1955,13 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                             targetNames={line2Names}
                             selectedTargetIds={line2TargetStatusIds}
                             toggleTarget={toggleLine2Target}
+                            setTargetName={setLine2TargetName}
+                            removeTarget={removeLine2Target}
+                            newTargetId={newLine2TargetId}
+                            setNewTargetId={setNewLine2TargetId}
+                            newTargetName={newLine2TargetName}
+                            setNewTargetName={setNewLine2TargetName}
+                            addTarget={addLine2Target}
                             limits={line2TargetLimits}
                             setLimit={changeLine2Limit}
                             maxLargeLabel="Limit dużego zamówienia (laptopy)"

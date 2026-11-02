@@ -167,8 +167,46 @@ export class ProductService {
 
       return response.data;
     } catch (e) {
-      if (axios.isAxiosError(e) && e.status >= 400 && e.status <= 500) {
-        throw new BadRequestException(e.message);
+      if (axios.isAxiosError(e)) {
+        const status = e.response?.status ?? HttpStatus.BAD_REQUEST;
+        let shoperError = e.response?.data ?? e.message;
+        if (shoperError && typeof shoperError === "object" && !Array.isArray(shoperError)) {
+          const details = shoperError as Record<string, unknown>;
+          const description = details.error_description;
+          if (typeof description === "string") {
+            const match = /Attribute ['"]?(\d+)['"]?/.exec(description);
+            if (match) {
+              try {
+                const attributeResponse = await this.httpService.axiosRef.get(
+                  this.getShoperRestUrl(`/attributes/${match[1]}`),
+                  { headers: { Authorization: `Bearer ${decodedTokens.shoperToken}` } },
+                );
+                const attribute = attributeResponse.data as Record<string, unknown>;
+                const name = typeof attribute?.name === "string" ? attribute.name.trim() : "";
+                if (name) {
+                  shoperError = {
+                    ...details,
+                    error_description: description
+                      .replace(match[0], `Atrybut „${name}” (ID ${match[1]})`)
+                      .replace(/ has invalid option value/i, ' ma nieprawidłową wartość opcji'),
+                  };
+                }
+              } catch {
+                // Keep the original Shoper error if attribute metadata is unavailable.
+              }
+            }
+          }
+        }
+        console.error("Shoper add product error:", status, shoperError);
+        throw new HttpException(
+          {
+            message: "Shoper rejected product request",
+            error: e.response?.statusText ?? e.code ?? "Shoper API error",
+            statusCode: status,
+            shoperError,
+          },
+          status,
+        );
       }
       throw new InternalServerErrorException();
     }
@@ -297,8 +335,19 @@ export class ProductService {
         throw new NotFoundException("Produkt Apilo o podanym SKU nie istnieje");
       }
 
-      const productId =
-        products[0].id ?? products[0].productId ?? products[0].product_id;
+      const matchingProducts = products.filter((product: any) => product.sku === sku);
+      const requestedId = dto.targetId == null ? null : String(dto.targetId);
+      const selectedProducts = requestedId == null
+        ? matchingProducts
+        : matchingProducts.filter((product: any) =>
+            String(product.id ?? product.productId ?? product.product_id) === requestedId,
+          );
+      if (selectedProducts.length !== 1 ||
+          (listResponse.data?.totalCount ?? products.length) > products.length) {
+        throw new BadRequestException("Nie można jednoznacznie wskazać produktu Apilo o podanym SKU");
+      }
+
+      const productId = selectedProducts[0].id ?? selectedProducts[0].productId ?? selectedProducts[0].product_id;
       if (!productId) {
         throw new NotFoundException("Nie udało się ustalić ID produktu Apilo");
       }
@@ -328,6 +377,9 @@ export class ProductService {
 
       return updateResponse.data;
     } catch (e) {
+      if (e instanceof BadRequestException || e instanceof NotFoundException) {
+        throw e;
+      }
       if (axios.isAxiosError(e) && e.response) {
         throw new BadRequestException(e.response.data);
       }

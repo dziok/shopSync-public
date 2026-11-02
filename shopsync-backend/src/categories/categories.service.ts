@@ -47,6 +47,27 @@ export class CategoriesService {
         }
     }
 
+    async getCategoryFromShoper(decodedTokens: JwtPayload, id: string) {
+        try {
+            const response = await this.httpService.axiosRef.get(
+                this.getShoperRestUrl(`/categories/${encodeURIComponent(id)}`),
+                {
+                    params: { include: 'translations' },
+                    headers: {
+                        Authorization: `Bearer ${decodedTokens.shoperToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+            return response.data;
+        } catch (e) {
+            if (axios.isAxiosError(e) && e.response) {
+                throw new BadRequestException(e.response.data);
+            }
+            throw new InternalServerErrorException();
+        }
+    }
+
     async getProducers( // Zmieniono nazwę metody
         decodedTokens: JwtPayload,
         limit: number = 50,

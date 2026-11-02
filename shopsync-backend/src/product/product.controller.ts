@@ -1,12 +1,16 @@
-import { Body, Controller, Post, Headers, UnauthorizedException, UseGuards, Param, Put, Get, Query, Delete, Patch } from '@nestjs/common';
+import { Body, Controller, Post, Headers, UseGuards, Param, Put, Get, Query, Delete, Patch } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { JwtAuthGuard } from '../auth/auth.guard';
 import { DecodedAuthTokens } from '../decorators';
 import { JwtPayload } from '../auth/auth.dto';
+import { AuthService } from '../auth/auth.service';
 
 @Controller('product')
 export class ProductController {
-  constructor(private readonly productService: ProductService) { }
+  constructor(
+    private readonly productService: ProductService,
+    private readonly authService: AuthService,
+  ) { }
 
 
   @Post('shoper')
@@ -129,6 +133,18 @@ export class ProductController {
     return this.productService.createProductOffer(token, body);
   }
 
+  @Post('allegroProduct/account')
+  @UseGuards(JwtAuthGuard)
+  async createProductForAccount(
+    @Body() body: any,
+    @Query('allegroAccountId') allegroAccountId = ''
+  ) {
+    const token = await this.authService.getAllegroProdAccessToken(
+      allegroAccountId || undefined,
+    );
+    return this.productService.createProductOffer(token, body);
+  }
+
   @Post('allegroProductProposals')
   async createProductproposals(
     @Body() body: any,
@@ -157,12 +173,11 @@ export class ProductController {
   }
 
   @Get('responsibleProducers')
-  async getResponsiblePersons(@Headers() headers: Record<string, string | undefined>) {
-    const authHeader = headers['authorization'] || headers['Authorization'];
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
-    }
-    const token = authHeader.slice('Bearer '.length).trim();
+  @UseGuards(JwtAuthGuard)
+  async getResponsiblePersons(@Query('allegroAccountId') allegroAccountId = '') {
+    const token = await this.authService.getAllegroProdAccessToken(
+      allegroAccountId || undefined,
+    );
     return this.productService.getResponsiblePersons(token);
   }
 

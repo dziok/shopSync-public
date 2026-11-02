@@ -1,0 +1,60 @@
+.template-admin {
+  background: #222;
+  border: 1px solid #424242;
+  color: #f2f2f2;
+  margin: 10px auto 24px;
+  max-width: 1200px;
+  min-height: 520px;
+  text-align: left;
+}
+
+.template-admin__header {
+  align-items: center;
+  border-bottom: 1px solid #444;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.template-admin__header h2 { font-size: 1.2rem; margin: 0 0 2px; }
+.template-admin__header span { color: #bbb; font-size: .85rem; }
+.template-admin__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.template-admin__actions button { margin: 0; }
+.template-admin__layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); }
+.template-admin__templates { border-right: 1px solid #444; display: flex; flex-direction: column; padding: 8px; }
+.template-admin__templates button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #ddd;
+  font-size: .86rem;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+.template-admin__templates button.selected { background: #315f3d; color: white; }
+.template-admin__templates button:hover { background: #393939; }
+.template-admin__templates button.selected:hover { background: #315f3d; }
+.template-admin__main { min-width: 0; padding: 12px 20px 28px; }
+.template-admin__fields { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 20px; }
+.template-admin__descriptions .template-admin__fields { padding-bottom: 12px; }
+.template-admin__section-title { align-items: center; border-bottom: 1px solid #444; display: flex; justify-content: space-between; margin-top: 18px; }
+.template-admin__section-title h3 { font-size: 1rem; margin: 0; }
+.template-admin__entry { border-bottom: 1px solid #3d3d3d; display: grid; gap: 12px; padding: 14px 0; }
+.template-admin__catalog { padding-top: 18px; }
+.template-admin__entry-head { align-items: center; display: flex; justify-content: space-between; }
+.template-admin__block-head { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+.template-admin__block-head .MuiTextField-root { min-width: 200px; }
+.template-admin__blocks { padding-top: 10px; }
+.template-admin__rule-fields { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.template-admin__entry button, .template-admin__section-title button { margin: 0; }
+@media (max-width: 760px) {
+  .template-admin__layout { grid-template-columns: 1fr; }
+  .template-admin__templates { border-bottom: 1px solid #444; border-right: 0; flex-direction: row; overflow-x: auto; }
+  .template-admin__templates button { flex: 0 0 auto; white-space: nowrap; }
+  .template-admin__main { padding: 12px; }
+  .template-admin__fields { grid-template-columns: 1fr; }
+  .template-admin__rule-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

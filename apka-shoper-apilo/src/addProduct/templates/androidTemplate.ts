@@ -1,3 +1,5 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const AndroidTemplate = (
     additionalInfo: string,
     G5: boolean,
@@ -17,7 +19,7 @@ export const AndroidTemplate = (
     backCamera: string,
     frontCamera: string,
 
-) => `
+) => renderConditionalDescription(`
 
 <div style="display: flex; align-items: center; flex-direction: column; ">
 
@@ -315,9 +317,6 @@ export const AndroidTemplate = (
         * {
             font-family: "Poppins", serif;
             font-style: normal;
-        }
-        .false{
-        display: none !important
         }
         .phone_img_l {
             max-width: 220px !important;
@@ -707,4 +706,4 @@ export const AndroidTemplate = (
 
 </div>
 
-`
+`)

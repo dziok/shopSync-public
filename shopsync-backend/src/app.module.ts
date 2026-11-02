@@ -12,6 +12,8 @@ import { TranslateModule } from './translate/translate.module';
 import { ApiloOrderModule } from './order/order.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { resolve } from 'path';
+import { TemplateSettingsModule } from './template-settings/template-settings.module';
+import { ChatGptFeedModule } from './chatgpt-feed/chatgpt-feed.module';
 
 
 const appRoot = resolve(__dirname, '..');
@@ -28,6 +30,6 @@ const appRoot = resolve(__dirname, '..');
       `${appRoot}/.env`,
     ],
     isGlobal: true
-  }), ScheduleModule.forRoot(), AuthModule, ProductModule, ProductImageModule, CategoriesModule, CloudinaryModule, AttributeGroupsModule, TranslateModule, ApiloOrderModule],
+  }), ScheduleModule.forRoot(), AuthModule, ProductModule, ProductImageModule, CategoriesModule, CloudinaryModule, AttributeGroupsModule, TranslateModule, ApiloOrderModule, TemplateSettingsModule, ChatGptFeedModule],
 })
 export class AppModule { }

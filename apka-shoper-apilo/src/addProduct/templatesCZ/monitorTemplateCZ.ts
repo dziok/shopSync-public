@@ -1,3 +1,6 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+import { renderAdditionalFeatureItems } from "../additionalFeatures";
+
 export const monitorTemplateCZ = (
     producer: string,
     name: string,
@@ -17,9 +20,11 @@ export const monitorTemplateCZ = (
     additionalInfo1: string,
     showIps: string,
     showTn: string,
-    portsLI: string
+    portsLI: string,
+    extraFeatures = "",
+    speakers = false
 
-) => `
+) => renderConditionalDescription(`
 <div id="mainContainer" style="display: flex; align-items: center; flex-direction: column;">
 
     <div class="monitors_section">
@@ -41,6 +46,7 @@ export const monitorTemplateCZ = (
                     <li> Napájecí kabel je součástí balení </li>
 
                 </ul>
+                ${extraFeatures.trim() ? `<div class="monitor_extra_features"><p class="monitors_p">Další funkce:</p><ul class="monitors_ul">${renderAdditionalFeatureItems(extraFeatures)}</ul></div>` : ""}
                 <p class="monitors_p">Specifikace:</p>
                 <ul class="monitors_ul">
                     <li>Rozlišení: ${resolution}px</li>
@@ -52,12 +58,13 @@ export const monitorTemplateCZ = (
                     <li>Kontrast: ${contrast}</li>
                     <li>Porty: ${ports}</li>
                     <li>HDR: ${HDR}</li>
+                    ${speakers ? '<li>Reproduktory: vestavěné</li>' : ''}
                 </ul>
             </div>
         </div>
     </div>
 
-    <div class="monitors_section" style="display: ${showIps}">
+    <div class="monitors_section" data-omit="${showIps}">
         <div class="monitorsLeft_container">
             <img onerror="this.onerror=null; this.src='../ips.png';" src="/userdata/public/skins/shoper_basic_copy_8/assets/ips.png" alt="ips" class="monitors_logo">
             <div class="monitorsVl"></div>
@@ -72,7 +79,7 @@ export const monitorTemplateCZ = (
         </div>
     </div>
 
-    <div class="monitors_section" style="display: ${showTn}">
+    <div class="monitors_section" data-omit="${showTn}">
         <div class="monitorsLeft_container">
             <img onerror="this.onerror=null; this.src='../tn.png';" src="/userdata/public/skins/shoper_basic_copy_8/assets/tn.png" alt="tn" class="monitors_logo">
             <div class="monitorsVl"></div>
@@ -141,7 +148,7 @@ export const monitorTemplateCZ = (
         </div>
     </div>
 
-    <div class="monitors_section" style="display: ${pivot}">
+    <div class="monitors_section" data-omit="${pivot}">
         <div class="monitorsLeft_container">
             <img onerror="this.onerror=null; this.src='../rotate.png';" src="/userdata/public/skins/shoper_basic_copy_8/assets/rotate.png" alt="pivot" class="monitors_logo">
             <div class="monitorsVl"></div>
@@ -284,7 +291,7 @@ export const monitorTemplateCZ = (
         }
     </style>
 
-`
+`)
 
 export const monitorApiloTemplate1 = (
     producer: string,

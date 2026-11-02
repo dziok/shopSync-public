@@ -1,3 +1,8 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+import { renderAdditionalFeatureItems } from "../additionalFeatures";
+import { getAioStandDescription } from "../aioStand";
+import { isPcPortGroups, renderPcPortListItems, type PcPortGroups } from "../pcPortGroups";
+
 export const pcTemplateSK = (
     title: string,
     grade: string,
@@ -12,7 +17,7 @@ export const pcTemplateSK = (
     ramAmount: string,
     ramType: string,
     dvd: string,
-    ports: string,
+    ports: string | PcPortGroups,
     additionalInfo: string,
     cpuTypesDescriptions: string,
     ramTypesDescriptions: string,
@@ -29,7 +34,9 @@ export const pcTemplateSK = (
     touchScreen: string,
     microphone: string,
     camera: string,
-) => `
+    extraFeatures = "",
+    aioStand = ""
+) => renderConditionalDescription(`
 <div id="mainContainer" style="display: flex !important; align-items: center !important; flex-direction: column !important;">
 <div class="poleasingowe_section">
     <div>
@@ -39,7 +46,9 @@ export const pcTemplateSK = (
         <h2 class="poleasingowe_h2">${title}</h2>
         <div class="poleasingowe_text_container">
                 ${system !== 'brak systemu'
-        ? ` 
+        ? /home assistant/i.test(system)
+            ? `<p class="poleasingowe_p">Počítač má nainštalovaný systém Home Assistant OS (HAOS), pripravený na ďalšiu konfiguráciu používateľom.</p>`
+            : `
             <p class="poleasingowe_p system_${system}" style="color: #313131 !important;">
                 Počítač má originálny systém ${system} 64bit v slovenskom jazykovom rozhraní, s najnovšími ovládačmi a doplnkovým internetovým prehliadačom. Po vybalení z krabice je pripravený na použitie.<br>
             </p>
@@ -69,8 +78,15 @@ export const pcTemplateSK = (
         : ""}
                 <li><b class="poleasingowe_b">Pamäť:</b> ${ramAmount} ${ramType}</li>
                 <li><b class="poleasingowe_b">Mechanika:</b> ${dvd}</li>
-                <li><b class="poleasingowe_b">Porty:</b> ${ports}</li>
+                ${isPcPortGroups(ports)
+                    ? renderPcPortListItems(ports, {
+                        casePorts: "Konektory skrine",
+                        motherboardPorts: "Konektory základnej dosky",
+                        gpuPorts: "Konektory grafickej karty",
+                    })
+                    : ports ? `<li><b class="poleasingowe_b">Porty:</b> ${ports}</li>` : ""}
             </ul>
+            ${extraFeatures.trim() ? `<div class="pc_extra_features"><h3 class="poleasingowe_h3">Ďalšie vlastnosti</h3><ul class="poleasingowe_ul">${renderAdditionalFeatureItems(extraFeatures)}</ul></div>` : ""}
         </div>
     </div>
 </div>
@@ -88,6 +104,7 @@ export const pcTemplateSK = (
             </p>
             <p class="poleasingowe_p" style="color: #313131 !important;">Špecifikácia konštrukcie AIO:</p>
             <ul class="poleasingowe_ul">
+                ${getAioStandDescription(aioStand, 'sk') ? `<li><b class="poleasingowe_b">Stojan AIO:</b> ${getAioStandDescription(aioStand, 'sk')}</li>` : ""}
                 <li><b class="poleasingowe_b">Rozlíšenie:</b> ${resolution}</li>
                 <li><b class="poleasingowe_b">Typ panela:</b> ${matrixType}</li>
                 <li><b class="poleasingowe_b">Veľkosť obrazovky:</b> ${matrixSize}</li>
@@ -157,14 +174,6 @@ export const pcTemplateSK = (
             font-style: normal;
         }
 
-        .system_Brak , .disk_Brak{
-        display: none
-        }
-
-            .poleasingoweCaseType_Tower, .poleasingoweCaseType_Mid, .poleasingoweCaseType_SFF, .poleasingoweCaseType_USDT, .poleasingoweCaseType_Tiny {
-            display: none !important
-            }
-
         .poleasingowe_h3 {
             color: #313131;
             font-size: 20px;
@@ -193,11 +202,49 @@ export const pcTemplateSK = (
             text-align: justify
         }
 
+        .haos_notice {
+            width: 100%;
+            border-top: 1px solid #e3e3e3;
+            margin-top: 20px;
+            padding-top: 22px;
+        }
+
+        .haos_notice .poleasingowe_h3 {
+            font-weight: 600;
+            margin: 0 0 12px;
+        }
+
+        .haos_notice .poleasingowe_p2 {
+            text-align: left;
+            line-height: 1.6;
+            margin: 0 0 10px;
+        }
+
+        .haos_notice .poleasingowe_p2:last-child {
+            margin-bottom: 0;
+        }
+
         .poleasingowe_ul {
             font-size: 16px;
             line-height: 2;
             margin-left: 2rem;
             color: #494949;
+        }
+
+        .pc_extra_features {
+            border-top: 1px solid #eee;
+            margin-top: 16px;
+            padding-top: 16px;
+        }
+
+        .pc_extra_features .poleasingowe_h3 {
+            font-weight: 600;
+            margin: 0 0 10px;
+        }
+
+        .pc_extra_features .poleasingowe_ul {
+            line-height: 1.6;
+            margin-top: 0;
         }
 
         #poleasingowe_photo_container {
@@ -288,6 +335,4 @@ export const pcTemplateSK = (
             }
         }
     </style>
-`
-
-
+`)

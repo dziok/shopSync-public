@@ -8,11 +8,12 @@ import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import { monitorApiloTemplate1, monitorApiloTemplate2, monitorTemplate } from "./templates/monitorTemplate";
 import './addProducts.css';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import { monitorCaseVC, monitorCaseVC_CZ, monitorCaseVC_SK, monitorVC, monitorVC_CZ, monitorVC_SK, stand_CZ, stand_SK, vc_CZ, vc_SK } from "./additionalDescriptions/visualConditionDescriptions";
 import { monitorTemplateCZ } from "./templatesCZ/monitorTemplateCZ";
 import { monitorTemplateSK } from "./templatesSK/monitorTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
+import { findAdditionalFeaturesAttribute, isAdditionalFeaturesName, readAdditionalFeaturesFromDescription, renderAdditionalFeatureItems, splitAdditionalFeatures, translateAdditionalFeatures } from "./additionalFeatures";
 import { Attribute, FormData as AllegroFormData, Product, ProductParameter, ProductSafetyCertificateResource, ProductSafetyProducerResource, ProducersResource, SearchResult } from "../types";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
@@ -21,15 +22,20 @@ import { handleGetAttributeList } from "../backendQueries/handleGetAttributeList
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { AddImageShoper } from "../backendQueries/addImageShoper";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import React from "react";
 import AllegroMonitorParameters from "./allegroComponents/AllegroLaptopParameters";
 import { buildOfferParameters } from "./allegroComponents/buildOfferParameters";
+import { resolveImportedShoperAttribute } from "./allegroComponents/importShoperAttribute";
+import { ShoperImportedFieldStyles, shoperEnabled, shoperFieldWasProvided, shoperImportedAttributeNames, useShoperImportedFields } from "./shoperImportedFields";
 import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
 import { buildMonitorAllegroDescription } from "./templatesAllegro/monitorAllegroDescription";
 import type { Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
 import AllegroDescriptionEditor, { AllegroDescriptionPreview } from "./allegroComponents/AllegroDescriptionEditor";
 import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
 import { monitorParametersAllegro } from "../allegroParameters/monitorParameters";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 const ALLEGRO_MONITOR_CATEGORY_ID = "260041";
 const ALLEGRO_MONITOR_IMAGE_LIMIT = 16;
@@ -38,6 +44,7 @@ const ALLEGRO_MONITOR_SHIPPING_RATE = "KOMPY 2018";
 type AddMonitorProps = {
     authToken: string,
     accessTokenAllegro: string,
+    allegroAccountId?: string,
 }
 
 interface IFormInput {
@@ -86,15 +93,19 @@ function AddMonitor(props: AddMonitorProps) {
     const BASE_ATTRIBUTE_GROUP_ID = "16"; // ID grupy atrybutów bazowych (Stan/Gwarancja)
     const [portsListString, setPortsListString] = useState("");
     const { register, handleSubmit, watch, setValue, control, getValues } = useForm<IFormInput>()
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const images = useProductImages();
+    const { selectedImages, imageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
     const [additionalInfoSK, setAdditionalInfoSK] = useState("");
+    const [extraFeaturesCZ, setExtraFeaturesCZ] = useState("");
+    const [extraFeaturesSK, setExtraFeaturesSK] = useState("");
+    const [pendingImportedExtraFeatures, setPendingImportedExtraFeatures] = useState<{ text: string; attributeIds: number[] } | null>(null);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     // const [apiloImageUUIDS, setApiloImageUUIDS] = useState<string[]>([]);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
     let apiloImageUUIDs: string[] = [];
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [monitorAttributes, setMonitorAttributes] = useState<Attribute[]>([]);
@@ -113,6 +124,7 @@ function AddMonitor(props: AddMonitorProps) {
     const [searchName, setSearchName] = useState("");
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+    const { importedFields, clearImportedFields, markImportedFields, onImportedFieldChange } = useShoperImportedFields();
     const [lockedParams, setLockedParams] = useState<Set<string>>(new Set());
     const [responsibleData, setResponsibleData] = useState<ResponsibleResponse>();
     const [responsibleProducerId, setResponsibleProducerId] = useState("");
@@ -230,38 +242,9 @@ function AddMonitor(props: AddMonitorProps) {
 
     const getShoperAttributeByNames = (names: string[]) => {
         const normalizedNames = names.map(normalizeImportName);
-        const exactMatch = allAttributes.find((attribute) =>
+        return allAttributes.find((attribute) =>
             normalizedNames.includes(normalizeImportName(attribute.name))
         );
-        if (exactMatch) return exactMatch;
-        return allAttributes.find((attribute) => {
-            const attributeName = normalizeImportName(attribute.name);
-            return normalizedNames.some((name) =>
-                attributeName.includes(name) || name.includes(attributeName)
-            );
-        });
-    };
-
-    const coerceImportedAttributeValue = (attribute: Attribute, rawValue: unknown) => {
-        const values = (Array.isArray(rawValue) ? rawValue : [rawValue])
-            .map((value) => String(value ?? "").trim())
-            .filter(Boolean);
-        const attributeType = String((attribute as any).type ?? "");
-        if (attributeType === "1") {
-            return values.some((value) => ["tak", "true", "1", "yes"].includes(normalizeImportName(value)));
-        }
-        const options = Array.isArray((attribute as any).options) ? (attribute as any).options : [];
-        if (options.length > 0 && values.length > 0) {
-            const normalizedValue = normalizeImportName(values[0]);
-            const option = options.find((item: any) => {
-                const optionValue = normalizeImportName(item?.value ?? item?.option_id);
-                return optionValue === normalizedValue
-                    || optionValue.includes(normalizedValue)
-                    || normalizedValue.includes(optionValue);
-            });
-            if (option) return option.value ?? option.option_id;
-        }
-        return values.join(", ");
     };
 
     const handleAdditionalInfoBlur = async (value: string) => {
@@ -304,9 +287,10 @@ function AddMonitor(props: AddMonitorProps) {
             const match = producers.find((p) => (p.name ?? "").toLowerCase() === pendingProducerName.toLowerCase());
             if (match) {
                 setValue("producer", String(match.producer_id), { shouldDirty: true });
+                markImportedFields(["producer"]);
             }
         }
-    }, [producers, pendingProducerId, pendingProducerName, setValue]);
+    }, [producers, pendingProducerId, pendingProducerName, setValue, markImportedFields]);
 
     const fetchAttributes = async () => {
         try {
@@ -328,7 +312,7 @@ function AddMonitor(props: AddMonitorProps) {
             setMonitorAttributes(monitorList);
             setBaseAttributes(baseList);
             if (pendingShoperAttributes) {
-                applyAttributeEntriesToForm(pendingShoperAttributes);
+                applyAttributeEntriesToForm(pendingShoperAttributes, [...monitorList, ...baseList]);
                 setPendingShoperAttributes(null);
                 const fetchedAdditionalInfo = getAttrValueByNames(
                     ["Uwagi", "Uwaga", "Dodatkowa informacja", "Dodatkowa informacja - 1"],
@@ -362,11 +346,13 @@ function AddMonitor(props: AddMonitorProps) {
 
     const applyAttributeEntriesToForm = (
         entries: Array<[number, unknown]>,
+        attributes: Attribute[] = allAttributes,
     ) => {
+        const byId = new Map(attributes.map(attribute => [Number(attribute.attribute_id), attribute]));
         entries.forEach(([id, value]) => {
             const val = coerceAttributeValue(value);
             if (!val) return;
-            setValue(`attribute_${id}` as any, val, { shouldDirty: true });
+            setValue(`attribute_${id}` as any, String(byId.get(id)?.type) === "1" ? shoperEnabled(val) : val, { shouldDirty: true });
         });
     };
 
@@ -386,6 +372,7 @@ function AddMonitor(props: AddMonitorProps) {
                             control={control}
                             render={({ field }) => (
                                 <Checkbox
+                                    name={field.name}
                                     checked={!!field.value}
                                     onChange={(e) => field.onChange(e.target.checked)}
                                     inputRef={field.ref}
@@ -407,6 +394,7 @@ function AddMonitor(props: AddMonitorProps) {
                         control={control}
                         render={({ field }) => (
                             <Select
+                                name={field.name}
                                 labelId={`select-${attrId}-label`}
                                 label={attribute.name}
                                 value={field.value ?? ""}
@@ -430,12 +418,16 @@ function AddMonitor(props: AddMonitorProps) {
         }
 
         const handler = getTextAttributeHandler(attribute.name);
+        const isAdditionalFeatures = isAdditionalFeaturesName(attribute.name);
         return (
             <TextField
                 key={attrId}
                 label={attribute.name}
                 variant="outlined"
                 fullWidth
+                multiline={isAdditionalFeatures}
+                minRows={isAdditionalFeatures ? 3 : undefined}
+                helperText={isAdditionalFeatures ? "Jedna cecha w wierszu. Trafią do opisu Shopera i Allegro." : undefined}
                 slotProps={{ inputLabel: { shrink: true } }}
                 {...register(
                     `attribute_${attrId}`,
@@ -454,26 +446,6 @@ function AddMonitor(props: AddMonitorProps) {
     let showAdditionalInfoSK = ''
     let showPivot = ''
 
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-
-        setSelectedImages(sortedFiles);
-    };
-
-    useEffect(() => {
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
-
     const {
     } = useForm<String>()
 
@@ -485,6 +457,7 @@ function AddMonitor(props: AddMonitorProps) {
         }
 
         setLoadingShoperOffer(true);
+        clearImportedFields();
         try {
             const response = await axios.get(`${API_URL}/product/${offerId}`, {
                 headers: {
@@ -502,7 +475,8 @@ function AddMonitor(props: AddMonitorProps) {
 
             if (pl.name) setValue("name", pl.name, { shouldDirty: true });
             if (pl.description) setValue("description", pl.description, { shouldDirty: true });
-            if (product?.active != null) setValue("active", !!product.active, { shouldDirty: true });
+            const importedExtraFeatures = readAdditionalFeaturesFromDescription(pl.description, ".monitor_extra_features");
+            if (product?.active != null) setValue("active", shoperEnabled(product.active), { shouldDirty: true });
             if (cs.name) setNameCZ(cs.name);
             if (cs.description) setValue("descriptionCZ", cs.description, { shouldDirty: true });
             if (sk.name) setNameSK(sk.name);
@@ -599,6 +573,21 @@ function AddMonitor(props: AddMonitorProps) {
                     await handleAdditionalInfoBlur(fetchedAdditionalInfo);
                 }
             }
+            setPendingImportedExtraFeatures({ text: importedExtraFeatures, attributeIds: attributeEntries.map(([id]) => id) });
+
+            const imported = shoperImportedAttributeNames(attributeEntries);
+            if (shoperFieldWasProvided(pl.name)) imported.push("name");
+            if (shoperFieldWasProvided(pl.description)) imported.push("description");
+            if (shoperFieldWasProvided(product?.active)) imported.push("active");
+            if (shoperFieldWasProvided(cs.description)) imported.push("descriptionCZ");
+            if (shoperFieldWasProvided(sk.description)) imported.push("descriptionSK");
+            if (shoperFieldWasProvided(product?.code)) imported.push("SKU");
+            if (shoperFieldWasProvided(producerId)) imported.push("producer");
+            if (shoperFieldWasProvided(product?.stock?.price)) imported.push("price");
+            if (shoperFieldWasProvided(product?.stock?.stock)) imported.push("stock");
+            if (shoperFieldWasProvided(safetyProducerId)) imported.push("productSafetyProducerId");
+            if (normalizedCerts.length) imported.push("productSafetyCertificateIds");
+            markImportedFields(imported);
 
             toast.success("Dane aukcji z Shopera zostały pobrane.");
         } catch (error) {
@@ -664,6 +653,7 @@ function AddMonitor(props: AddMonitorProps) {
     };
 
     const handleImportAllegroFormToShoper = () => {
+        clearImportedFields();
         if (allAttributes.length === 0) {
             toast.error("Lista atrybutów Shopera nie została jeszcze pobrana.");
             return;
@@ -705,14 +695,25 @@ function AddMonitor(props: AddMonitorProps) {
             pivot: ["Pivot"],
         };
         let importedCount = 0;
+        const skipped: string[] = [];
         Object.entries(selectedProductData).forEach(([parameterName, rawValue]) => {
             const normalizedName = normalizeImportName(parameterName);
             const attribute = getShoperAttributeByNames(aliases[normalizedName] ?? [parameterName]);
-            if (!attribute) return;
+            if (!attribute) {
+                skipped.push(parameterName);
+                return;
+            }
             const attributeId = Number(attribute.attribute_id);
             if (!Number.isFinite(attributeId)) return;
-            const value = coerceImportedAttributeValue(attribute, rawValue);
-            if (value === "" || value == null) return;
+            const value = resolveImportedShoperAttribute(attribute, rawValue);
+            if (value === undefined) {
+                skipped.push(parameterName);
+                if ((String(attribute.type) === "2" || attribute.options?.length) &&
+                    resolveImportedShoperAttribute(attribute, getValues(`attribute_${attributeId}` as any)) === undefined) {
+                    setValue(`attribute_${attributeId}` as any, "", { shouldDirty: true });
+                }
+                return;
+            }
             setValue(`attribute_${attributeId}` as any, value, { shouldDirty: true, shouldValidate: true });
             importedCount += 1;
         });
@@ -731,6 +732,7 @@ function AddMonitor(props: AddMonitorProps) {
         if (typeof manufacturerCode === "string" && manufacturerCode.trim()) {
             setValue("SKU", manufacturerCode.trim(), { shouldDirty: true });
         }
+        if (skipped.length) toast.warning(`Pominięto ${skipped.length} pól bez odpowiednika w Shoperze: ${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? "..." : ""}.`);
         toast.success(`Zaimportowano ${importedCount} pól z Allegro do formularza monitora.`);
     };
 
@@ -750,6 +752,8 @@ function AddMonitor(props: AddMonitorProps) {
     }, []);
 
     useEffect(() => {
+        setResponsibleProducerId("");
+
         if (!props.accessTokenAllegro) {
             setResponsibleData(undefined);
             return;
@@ -760,7 +764,11 @@ function AddMonitor(props: AddMonitorProps) {
             setLoadingAllegroData(true);
             try {
                 const producersResponse = await axios.get(`${API_URL}/product/responsibleProducers`, {
-                    headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+                    params: { allegroAccountId: props.allegroAccountId },
+                    headers: {
+                        Authorization: `Bearer ${props.authToken}`,
+                        "Cache-Control": "no-cache",
+                    },
                 });
                 if (cancelled) return;
                 setResponsibleData(producersResponse.data);
@@ -778,7 +786,7 @@ function AddMonitor(props: AddMonitorProps) {
         return () => {
             cancelled = true;
         };
-    }, [props.accessTokenAllegro]);
+    }, [props.accessTokenAllegro, props.allegroAccountId]);
 
     const buildShoperAttributes = (data: IFormInput) => {
         const attrs: Record<number, string> = {};
@@ -789,7 +797,8 @@ function AddMonitor(props: AddMonitorProps) {
             const attrId = Number((attr as any).attribute_id);
             const value = (data as any)[`attribute_${attrId}`];
             if (value == null || value === "") return;
-            attrs[attrId] = joinValues(value);
+            attrs[attrId] = String(attr.type) === "1" && typeof value === "boolean"
+                ? (value ? "1" : "0") : joinValues(value);
         });
 
         const ensureAttr = (id: number, value: unknown) => {
@@ -875,7 +884,7 @@ function AddMonitor(props: AddMonitorProps) {
 
         try {
             //dodaj zdjęcia do apilo
-            try {
+            if (addToApilo) try {
                 // Pętla po wszystkich obrazach
                 for (let i = 0; i < selectedImages.length; i++) {
                     const formData = new FormData();
@@ -899,7 +908,6 @@ function AddMonitor(props: AddMonitorProps) {
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
 
 
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
@@ -954,6 +962,7 @@ function AddMonitor(props: AddMonitorProps) {
 
                 }
             });
+            if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
                     sku: data.SKU.toUpperCase()
@@ -1001,7 +1010,6 @@ function AddMonitor(props: AddMonitorProps) {
                     }
                 });
 
-            toast.success("Produkt " + response.data + " został pomyślnie dodany.");
             let ApiloAddedProductsFirstKey = Object.keys(apiloResponse.data.products)[0];
 
 
@@ -1033,7 +1041,8 @@ function AddMonitor(props: AddMonitorProps) {
                             "type": 9,
                             "values": [
                                 {
-                                    "value": monitorApiloTemplate1(producent, model, visualCondition, resolution, chasingCondition, diagonal, typeOfBlacklight, connectors, additionalInfo, portsListString),
+                                    "value": monitorApiloTemplate1(producent, model, visualCondition, resolution, chasingCondition, diagonal, typeOfBlacklight, connectors, additionalInfo, portsListString)
+                                        + (renderAdditionalFeatureItems(extraFeatures) ? `<h2>Funkcje dodatkowe</h2><ul>${renderAdditionalFeatureItems(extraFeatures)}</ul>` : ""),
                                 }
                             ]
                         },
@@ -1056,6 +1065,7 @@ function AddMonitor(props: AddMonitorProps) {
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
+            }
 
             const uploadImages = async () => {
                 const productId = response.data;
@@ -1077,7 +1087,6 @@ function AddMonitor(props: AddMonitorProps) {
                                 Authorization: `Bearer ${props.authToken}`
                             }
                         });
-                        toast.success(`Zdjęcie ${i + 1} poprawnie dodane`);
                     } catch (error) {
                         console.error("Image upload error:", error);
                         toast.error("Błąd podczas dodawania zdjęcia");
@@ -1086,16 +1095,19 @@ function AddMonitor(props: AddMonitorProps) {
                 }
             };
             if (selectedImages.length > 0) {
-                uploadImages();
+                await uploadImages();
             }
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
 
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error, allAttributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error, allAttributes));
             }
 
         };
@@ -1170,10 +1182,10 @@ function AddMonitor(props: AddMonitorProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas aktualizacji produktu");
+                toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu.", allAttributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas aktualizacji produktu");
+                toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu.", allAttributes));
             }
         } finally {
             setUpdatingProduct(false);
@@ -1201,6 +1213,44 @@ function AddMonitor(props: AddMonitorProps) {
     let HDR = getAttrValueByNames(["HDR"], String(watch("HDR", "") ?? ""));
     let pivot = getAttrValueByNames(["Pivot"], String(watch("pivot", "") ?? ""));
     let additionalInfo = getAttrValueByNames(["Uwagi", "Uwaga", "Dodatkowa informacja", "Dodatkowa informacja - 1"], String(watch("additionalInfo", "") ?? ""));
+    const extraFeaturesAttribute = findAdditionalFeaturesAttribute(allAttributes);
+    const extraFeaturesAttributeId = extraFeaturesAttribute?.attribute_id;
+    const extraFeatures = extraFeaturesAttributeId
+        ? String(watch(`attribute_${extraFeaturesAttributeId}`, "") ?? "")
+        : "";
+    const speakers = shoperEnabled(getAttrValueByName("Głośniki"));
+
+    useEffect(() => {
+        if (!extraFeaturesAttributeId || !pendingImportedExtraFeatures) return;
+        const field = `attribute_${extraFeaturesAttributeId}`;
+        if (!pendingImportedExtraFeatures.attributeIds.includes(extraFeaturesAttributeId)) {
+            setValue(field, pendingImportedExtraFeatures.text, { shouldDirty: true });
+            if (pendingImportedExtraFeatures.text) markImportedFields([field]);
+        }
+        setPendingImportedExtraFeatures(null);
+    }, [extraFeaturesAttributeId, pendingImportedExtraFeatures, getValues, setValue, markImportedFields]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!splitAdditionalFeatures(extraFeatures).length) {
+            setExtraFeaturesCZ("");
+            setExtraFeaturesSK("");
+            return;
+        }
+        setExtraFeaturesCZ("");
+        setExtraFeaturesSK("");
+        const timer = window.setTimeout(() => {
+            Promise.all([
+                translateAdditionalFeatures(extraFeatures, handleTranslateCZ),
+                translateAdditionalFeatures(extraFeatures, handleTranslateSK),
+            ]).then(([cz, sk]) => {
+                if (cancelled) return;
+                setExtraFeaturesCZ(cz);
+                setExtraFeaturesSK(sk);
+            });
+        }, 400);
+        return () => { cancelled = true; window.clearTimeout(timer); };
+    }, [extraFeatures]);
     let descriptionLanguage = String(watch("descriptionLanguage", "description") ?? "description")
     const connectProductAllegro = Boolean(watch("connectProductAllegro", true));
     let visualCondition_CZ = ""
@@ -1225,7 +1275,9 @@ function AddMonitor(props: AddMonitorProps) {
         additionalInfo,
         showIPS,
         showTN,
-        portsListString
+        portsListString,
+        extraFeatures,
+        speakers
     ));
     let descriptionCZ = watch("descriptionCZ", monitorTemplateCZ(
         producent,
@@ -1246,7 +1298,9 @@ function AddMonitor(props: AddMonitorProps) {
         additionalInfoCZ,
         showIPS,
         showTN,
-        portsListString
+        portsListString,
+        extraFeaturesCZ || extraFeatures,
+        speakers
     ));
     let descriptionSK = watch("descriptionSK", monitorTemplateSK(
         producent,
@@ -1267,7 +1321,9 @@ function AddMonitor(props: AddMonitorProps) {
         additionalInfoSK,
         showIPS,
         showTN,
-        portsListString
+        portsListString,
+        extraFeaturesSK || extraFeatures,
+        speakers
     ));
 
     const selectedProducerName =
@@ -1293,8 +1349,10 @@ function AddMonitor(props: AddMonitorProps) {
             contrast,
             connectors,
             hdr: HDR,
+            speakers,
             pivot,
             additionalInfo,
+            extraFeatures,
             frame: frameForAllegro,
             design: designForAllegro,
         }),
@@ -1314,8 +1372,10 @@ function AddMonitor(props: AddMonitorProps) {
             contrast,
             connectors,
             HDR,
+            speakers,
             pivot,
             additionalInfo,
+            extraFeatures,
             frameForAllegro,
             designForAllegro,
         ],
@@ -1351,7 +1411,13 @@ function AddMonitor(props: AddMonitorProps) {
             });
 
             freshById.forEach((section) => {
-                if (!removedAutoSections.has(section.id)) sections.push(section);
+                if (removedAutoSections.has(section.id)) return;
+                if (section.id === "monitor-extra-features") {
+                    const featuresIndex = sections.findIndex((item) => item.id === "monitor-features");
+                    sections.splice(featuresIndex < 0 ? sections.length : featuresIndex + 1, 0, section);
+                } else {
+                    sections.push(section);
+                }
             });
 
             const ecoIndex = sections.findIndex(
@@ -1399,6 +1465,7 @@ function AddMonitor(props: AddMonitorProps) {
             przekatna: diagonal,
             rozdzielczosc: resolution,
             "rozdzielczosc px": resolution,
+            "rozdzielczosc natywna": resolution,
             "typ matrycy": typeOfMatrix,
             "rodzaj matrycy": typeOfMatrix,
             "czestotliwosc odswiezania": refreshRate,
@@ -1436,12 +1503,16 @@ function AddMonitor(props: AddMonitorProps) {
         setAllegroFormData((previous) => {
             const next = { ...previous };
             monitorAllegroParameters.forEach((parameter) => {
+                if (!parameter.required && !parameter.requiredForProduct) return;
                 const existing = next[parameter.name];
                 if (Array.isArray(existing) ? existing.length > 0 : String(existing ?? "").trim()) return;
                 const normalizedName = normalizeValue(parameter.name);
                 const candidate = explicitValues[normalizedName] ?? shoperValues.get(normalizedName);
                 if (candidate == null || String(candidate).trim() === "") return;
-                next[parameter.name] = matchDictionaryValue(parameter, candidate) as string | string[];
+                const matchedValue = matchDictionaryValue(parameter, candidate) as string | string[];
+                if (Array.isArray(matchedValue) ? matchedValue.length > 0 : String(matchedValue ?? "").trim()) {
+                    next[parameter.name] = matchedValue;
+                }
             });
             return next;
         });
@@ -1677,7 +1748,9 @@ function AddMonitor(props: AddMonitorProps) {
             showAdditionalInfo,
             showIPS,
             showTN,
-            formattedString
+            formattedString,
+            extraFeatures,
+            speakers
         ));
         setValue("descriptionCZ", monitorTemplateCZ(
             producent,
@@ -1698,7 +1771,9 @@ function AddMonitor(props: AddMonitorProps) {
             showAdditionalInfoCZ,
             showIPS,
             showTN,
-            formattedString
+            formattedString,
+            extraFeaturesCZ || extraFeatures,
+            speakers
         ));
         setValue("descriptionSK", monitorTemplateSK(
             producent,
@@ -1719,7 +1794,9 @@ function AddMonitor(props: AddMonitorProps) {
             showAdditionalInfoSK,
             showIPS,
             showTN,
-            formattedString
+            formattedString,
+            extraFeaturesSK || extraFeatures,
+            speakers
         ));
     }, [producent,
         name,
@@ -1737,17 +1814,22 @@ function AddMonitor(props: AddMonitorProps) {
         contrast,
         connectors,
         HDR,
+        speakers,
         pivot,
         additionalInfo,
         additionalInfoCZ,
         additionalInfoSK,
+        extraFeatures,
+        extraFeaturesCZ,
+        extraFeaturesSK,
         typeOfMatrix,
         setValue]);
 
     return (
         <>
             <div className="addProductMainContainer">
-                <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <ShoperImportedFieldStyles fields={importedFields} />
                     <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                     <Box
                         sx={{ py: 2, display: 'grid', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
@@ -1862,7 +1944,7 @@ function AddMonitor(props: AddMonitorProps) {
                                                 {option?.name ?? ""}
                                             </li>
                                         )}
-                                        renderInput={(params) => <TextField {...params} label="Producent" />}
+                                        renderInput={(params) => <TextField {...params} name="producer" label="Producent" />}
                                         onChange={(_, value) => {
                                             field.onChange(value?.producer_id ?? "");
                                         }}
@@ -1881,6 +1963,7 @@ function AddMonitor(props: AddMonitorProps) {
                                     defaultValue={0}
                                     render={({ field }) => (
                                         <Select
+                                            name={field.name}
                                             labelId="product-safety-producer-label"
                                             label="Product Safety Producer"
                                             value={field.value != null ? String(field.value) : ""}
@@ -1916,6 +1999,7 @@ function AddMonitor(props: AddMonitorProps) {
                                     defaultValue={[]}
                                     render={({ field }) => (
                                         <Select
+                                            name={field.name}
                                             multiple
                                             labelId="product-safety-certificates-label"
                                             label="Product Safety Certificates"
@@ -1963,7 +2047,7 @@ function AddMonitor(props: AddMonitorProps) {
                             {/* Pole "Stan" i inne bazowe są teraz pobierane z atrybutów Shopera */}
                             <TextField label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
                             <TextField label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
-                            <TextField label="Cena" type="number" InputLabelProps={{ shrink: true }} {...register("price")} />
+                            <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
                             <label >opis</label>
                             <textarea defaultValue={monitorTemplate('', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')}  {...register("description")} />
 
@@ -1988,30 +2072,19 @@ function AddMonitor(props: AddMonitorProps) {
                                     gap: 2,
                                 }}
                             >
-                                {monitorAttributes.map((attr) => renderAttributeControl(attr))}
+                            {monitorAttributes.map((attr) => renderAttributeControl(attr))}
                             </Box>
                             {/* Kontrast i stan obudowy są teraz pobierane jako atrybuty z Shopera */}
 
+                            {!loadingAttributes && allAttributes.length > 0 && !extraFeaturesAttributeId && (
+                                <Typography variant="body2" color="warning.main">
+                                    Dodaj atrybut tekstowy „Dodatkowe cechy” do grupy 50 w Shoperze, aby wpisywać funkcje monitora.
+                                </Typography>
+                            )}
+
                             <FormControlLabel control={<Checkbox  {...register("frame")} />} label="ultra cienka ramka" />
                             <FormControlLabel control={<Checkbox  {...register("design")} />} label="nowoczesny design" />
-                            <label>Dodaj zdjęcia</label>
-                            <Button
-                                variant="contained"
-                                component="label"
-                            >
-                                Dodaj zdjęcia
-                                <input
-                                    style={{ width: '100%' }}
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    hidden
-                                />
-                            </Button>
-                            <Typography>
-                                {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                            </Typography>
+                            <ProductImageManager {...images} />
 
                             <Box
                                 sx={{
@@ -2078,6 +2151,8 @@ function AddMonitor(props: AddMonitorProps) {
                                         !props.accessTokenAllegro
                                         || loadingAllegroData
                                         || addingAllegroOffer
+                                        || !images.imagesReady
+                                        || images.uploadingImages
                                     }
                                 >
                                     {addingAllegroOffer
@@ -2087,12 +2162,14 @@ function AddMonitor(props: AddMonitorProps) {
                             </Box>
 
                             <Button variant="outlined" type="reset"  >Reset formularza</Button>
-                            <Button variant="contained" type="submit" >Dodaj</Button>
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                            </ApiloSubmitControls>
                             <Button
                                 variant="contained"
                                 color="warning"
                                 onClick={handleSubmit(handleUpdateProduct)}
-                                disabled={updatingProduct}
+                                disabled={updatingProduct || !images.imagesReady || images.uploadingImages}
                             >
                                 {updatingProduct ? "Aktualizowanie..." : "Aktualizuj w Shoperze"}
                             </Button>

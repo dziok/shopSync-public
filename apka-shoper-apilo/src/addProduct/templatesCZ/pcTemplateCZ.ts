@@ -1,3 +1,7 @@
+import { renderAdditionalFeatureItems } from "../additionalFeatures";
+import { getAioStandDescription } from "../aioStand";
+import { isPcPortGroups, renderPcPortGridRows, type PcPortGroups } from "../pcPortGroups";
+
 export const pcTemplateCZ = (
     title: string,
     grade: string,
@@ -12,7 +16,7 @@ export const pcTemplateCZ = (
     ramAmount: string,
     ramType: string,
     dvd: string,
-    ports: string[],
+    ports: string[] | PcPortGroups,
     additionalInfo: string,
     cpuTypesDescriptions: string,
     ramTypesDescriptions: string,
@@ -29,7 +33,9 @@ export const pcTemplateCZ = (
     touchScreen: string,
     microphone: string,
     camera: string,
-    wifi: string
+    wifi: string,
+    extraFeatures = "",
+    aioStand = ""
 ) => `
 <div id="mainContainer" style="display: flex !important; align-items: center !important; flex-direction: column !important;">
 
@@ -41,7 +47,9 @@ export const pcTemplateCZ = (
                 <h2 class="poleasingowe_h2">${title}</h2>
                 <div class="poleasingowe_text_container">
                                 ${system !== 'brak systemu'
-        ? `                    <p class="poleasingowe_p" > Počítač má originální systém ${system} 64bit v české jazykové verzi, s nejnovějšími ovladači a dodatečným internetovým prohlížečem. Po vybalení z krabice je připraven k použití.<br></p>`
+        ? /home assistant/i.test(system)
+            ? `<p class="poleasingowe_p">Počítač má nainstalovaný systém Home Assistant OS (HAOS), připravený k další konfiguraci uživatelem.</p>`
+            : `                    <p class="poleasingowe_p" > Počítač má originální systém ${system} 64bit v české jazykové verzi, s nejnovějšími ovladači a dodatečným internetovým prohlížečem. Po vybalení z krabice je připraven k použití.<br></p>`
         : ""}
 
                                 <div class="pc_spec_box">
@@ -72,17 +80,16 @@ ${wifi ? `<dt>Wi-Fi</dt><dd>ano</dd>` : ""}
 
                                         <div class="pc_spec_divider"></div>
 
-                                        <dt>Porty</dt>
-                                        <dd>
-                                            <div class="pc_spec_chips">
-                                            <div class="pc_spec_chips">
-                                            ${(ports ?? []).filter(Boolean).map(p => `<span class="pc_spec_chip">${p}</span>`).join('')}
-                                            </div>
-
-                                            </div>
-                                        </dd>
+                                        ${isPcPortGroups(ports)
+                                            ? renderPcPortGridRows(ports, {
+                                                casePorts: "Konektory skříně",
+                                                motherboardPorts: "Konektory základní desky",
+                                                gpuPorts: "Konektory grafické karty",
+                                            })
+                                            : ports?.length ? `<dt>Porty</dt><dd><div class="pc_spec_chips">${ports.filter(Boolean).map(p => `<span class="pc_spec_chip">${p}</span>`).join('')}</div></dd>` : ""}
                                     </dl>
                                 </div>
+                                ${extraFeatures.trim() ? `<div class="pc_extra_features"><h3 class="pc_spec_title">Další vlastnosti</h3><ul>${renderAdditionalFeatureItems(extraFeatures)}</ul></div>` : ""}
                 </div>
             </div>
         </div>
@@ -102,6 +109,7 @@ ${wifi ? `<dt>Wi-Fi</dt><dd>ano</dd>` : ""}
             </p>
             <p class="poleasingowe_p" style="color: #313131 !important;">Specifikace konstrukce AIO:</p>
             <ul class="poleasingowe_ul">
+                ${getAioStandDescription(aioStand, 'cz') ? `<li><b class="poleasingowe_b">Stojan AIO:</b> ${getAioStandDescription(aioStand, 'cz')}</li>` : ""}
                 <li><b class="poleasingowe_b">Rozlišení:</b> ${resolution}</li>
                 <li><b class="poleasingowe_b">Typ panelu:</b> ${matrixType}</li>
                 <li><b class="poleasingowe_b">Velikost obrazovky:</b> ${matrixSize}</li>
@@ -222,6 +230,28 @@ ${wifi ? `<dt>Wi-Fi</dt><dd>ano</dd>` : ""}
             margin: 4px 0;
         }
 
+        .pc_extra_features {
+            border-top: 1px solid #eee;
+            margin-top: 16px;
+            padding-top: 16px;
+            color: #494949;
+        }
+
+        .pc_extra_features .pc_spec_title {
+            margin-bottom: 10px;
+        }
+
+        .pc_extra_features ul {
+            margin: 0;
+            padding-left: 22px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .pc_extra_features li + li {
+            margin-top: 6px;
+        }
+
         .pc_spec_chips {
             display: flex;
             flex-wrap: wrap;
@@ -267,6 +297,28 @@ ${wifi ? `<dt>Wi-Fi</dt><dd>ano</dd>` : ""}
             line-height: 1.5;
             color: #494949;
             text-align: justify
+        }
+
+        .haos_notice {
+            width: 100%;
+            border-top: 1px solid #e3e3e3;
+            margin-top: 20px;
+            padding-top: 22px;
+        }
+
+        .haos_notice .poleasingowe_h3 {
+            font-weight: 600;
+            margin: 0 0 12px;
+        }
+
+        .haos_notice .poleasingowe_p2 {
+            text-align: left;
+            line-height: 1.6;
+            margin: 0 0 10px;
+        }
+
+        .haos_notice .poleasingowe_p2:last-child {
+            margin-bottom: 0;
         }
 
         .poleasingowe_ul {
@@ -367,4 +419,3 @@ ${wifi ? `<dt>Wi-Fi</dt><dd>ano</dd>` : ""}
         }
     </style>
 `
-

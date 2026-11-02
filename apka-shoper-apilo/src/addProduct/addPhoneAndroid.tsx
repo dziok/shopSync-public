@@ -1,13 +1,13 @@
 import axios from "axios";
-import { useForm, SubmitHandler, Controller } from "react-hook-form"
-import { useEffect, useState } from "react";
+import { useForm, SubmitHandler, Controller, type Path, type PathValue } from "react-hook-form"
+import { useEffect, useRef, useState } from "react";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Autocomplete, Box, Button, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, TextField, ThemeProvider, Typography } from "@mui/material";
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import { monitorVC, monitorVC_CZ, monitorVC_SK, pcVC } from "./additionalDescriptions/visualConditionDescriptions";
 import { systemType } from "./additionalDescriptions/pcAdditionalDescription";
 import { AndroidTemplate } from "./templates/androidTemplate";
@@ -18,6 +18,15 @@ import { ProductSafetyCertificateResource, ProductSafetyProducerResource } from 
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
+import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
+import { AddImageShoper } from "../backendQueries/addImageShoper";
+import { buildPhoneShoperAttributes, formatPhoneMatrixGrade, isPhoneEnabled, missingPhoneAttributes, phoneAttributeGroupIds, PHONE_ATTRIBUTE_GROUP_ID } from "./phoneShoperAttributes";
+import { phoneDescriptionSignature, phoneOfferFormAttributes, phoneOfferGroupIds, phoneOfferProduct } from "./phoneShoperOffer";
+import { ShoperImportedFieldStyles, shoperFieldWasProvided, useShoperImportedFields } from "./shoperImportedFields";
+import { PhoneAdditionalShoperFields, PhoneGroupPicker, PhoneShoperSelect, usePhoneAvailableGroups, usePhoneCategoryGroups, usePhoneShoperAttributes } from "./phoneShoperFields";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 
 type AddphoneIOSProps = {
     authToken: string,
@@ -25,7 +34,6 @@ type AddphoneIOSProps = {
 
 interface IFormInput {
     model: string,
-    grade: string,
     cpu: string,
     ramAmount: string
     diskSize: string,
@@ -43,25 +51,26 @@ interface IFormInput {
     producer: number,
     frontCamera: string,
     backCamera: string,
-    waterproof: boolean,
-    dualSim: boolean,
+    waterproof: boolean | string,
+    dualSim: boolean | string,
     connection: string,
-    wirelessCharging: boolean,
-    NFC: boolean,
+    wirelessCharging: boolean | string,
+    NFC: boolean | string,
     resolution: string,
     batteryCapacity: string,
+    batteryStatus: string,
     diagonal: string,
     system: string,
-    G5: boolean,
+    G5: boolean | string,
     additionalInfo: string,
     additionalInfoSK: string,
     screenName: string,
     simType: string,
     matrixGrade: string,
-    status: string,
-    lens_ultraWide: boolean,
-    lens_tele: boolean,
-    lens_lidar: boolean,
+    caseGrade: string,
+    lens_ultraWide: boolean | string,
+    lens_tele: boolean | string,
+    lens_lidar: boolean | string,
     descriptionLanguage: string,
     productSafetyProducerId?: number,
     productSafetyCertificateIds?: number[],
@@ -89,9 +98,10 @@ interface ProducersResource {
 }
 let deviceType = ""
 function AddPhoneAndroid(props: AddphoneIOSProps) {
-    const { register, handleSubmit, watch, setValue, control } = useForm<IFormInput>()
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
+    const { register, handleSubmit, watch, setValue, getValues, reset, control } = useForm<IFormInput>()
+    const images = useProductImages();
+    const { selectedImages, setSelectedImages, imageLinks, setImageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     const [categories, setCategories] = useState<CategoryResource[]>([]);
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
@@ -101,7 +111,31 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
     const [relatedPackId, setRelatedPackId] = useState("");
+    const [shoperOfferId, setShoperOfferId] = useState("");
+    const [loadedOfferId, setLoadedOfferId] = useState<number | null>(null);
+    const [loadingShoperOffer, setLoadingShoperOffer] = useState(false);
+    const [updatingProduct, setUpdatingProduct] = useState(false);
+    const [pendingOffer, setPendingOffer] = useState<{ id: number; product: Record<string, unknown> } | null>(null);
+    const { importedFields, clearImportedFields, markImportedFields, onImportedFieldChange } = useShoperImportedFields();
+    const [offerGroups, setOfferGroups] = useState<{ categoryId: number; ids: number[] } | null>(null);
+    const importingOffer = useRef(false);
+    const importedDescriptionSignature = useRef<string | null>(null);
+    const hydratedOfferFields = useRef(new Set<string>());
+    const completedOfferImport = useRef(false);
+    const [manualAttributeGroupId, setManualAttributeGroupId] = useState("");
+    const categoryId = watch("category_id");
+    const selectedCategory = categories.find(category => category.category_id === Number(categoryId));
+    const categoryGroups = usePhoneCategoryGroups(API_URL, props.authToken, Number(categoryId), selectedCategory);
+    const hasCategoryAttributeGroup = categoryGroups.groupIds.some(id => id !== PHONE_ATTRIBUTE_GROUP_ID);
+    const availableGroups = usePhoneAvailableGroups(API_URL, props.authToken, Boolean(categoryId) && !categoryGroups.loading && !hasCategoryAttributeGroup);
+    const groupIds = phoneAttributeGroupIds([
+        ...categoryGroups.groupIds,
+        ...(offerGroups?.categoryId === Number(categoryId) ? offerGroups.ids : []),
+    ], manualAttributeGroupId);
+    const phoneAttributes = usePhoneShoperAttributes(API_URL, props.authToken, groupIds);
     let apiloImageUUIDs: string[] = [];
+
+    useEffect(() => { setManualAttributeGroupId(""); }, [categoryId]);
 
     const normalizeIdValue = (value: unknown) => {
         if (value == null) return null;
@@ -136,28 +170,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         return match?.name ?? idString;
     };
 
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-
-        setSelectedImages(sortedFiles);
-    };
-
-
-    useEffect(() => {
-
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
 
     const {
     } = useForm<String>()
@@ -248,11 +260,178 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         });
     }, []);
 
+    const handleFetchShoperOffer = async () => {
+        const id = Number(shoperOfferId.trim());
+        if (!Number.isInteger(id) || id <= 0) {
+            toast.error("Podaj poprawne ID produktu Shoper.");
+            return;
+        }
+        setLoadingShoperOffer(true);
+        clearImportedFields();
+        setLoadedOfferId(null);
+        setPendingOffer(null);
+        hydratedOfferFields.current.clear();
+        completedOfferImport.current = false;
+        importedDescriptionSignature.current = null;
+        importingOffer.current = true;
+        try {
+            const response = await axios.get(`${API_URL}/product/${id}`, {
+                headers: { Authorization: `Bearer ${props.authToken}` },
+            });
+            const product = phoneOfferProduct(response.data);
+            const productCategoryId = Number(product.category_id);
+            if (!Number.isInteger(productCategoryId) || productCategoryId <= 0) {
+                throw new Error("Produkt nie ma poprawnej kategorii Shoper.");
+            }
+            reset();
+            setSelectedImages([]);
+            setImageLinks([]);
+            setRelatedPackId("");
+            setNameCZ("");
+            setNameSK("");
+            setAdditionalInfoCZ("");
+            setAdditionalInfoSK("");
+            const translations = product.translations as Record<string, any> | undefined;
+            const pl = translations?.pl_PL;
+            if (pl?.name != null) setValue("name", String(pl.name));
+            if (pl?.active != null || product.active != null) setValue("active", isPhoneEnabled(pl?.active ?? product.active));
+            if (product.code != null) setValue("SKU", String(product.code));
+            if (product.producer_id != null) setValue("producer", Number(product.producer_id));
+            const stock = product.stock as Record<string, unknown> | undefined;
+            if (stock?.price != null) setValue("price", Number(stock.price));
+            if (stock?.stock != null) setValue("stock", Number(stock.stock));
+            if (translations?.cs_CZ?.name != null) setNameCZ(String(translations.cs_CZ.name));
+            if (translations?.sk_SK?.name != null) setNameSK(String(translations.sk_SK.name));
+            const safety = product.safety_information as Record<string, unknown> | undefined;
+            const producerId = normalizeIdValue(safety?.gpsr_producer_id ?? product.product_safety_producer_id);
+            if (typeof producerId === "number") setValue("productSafetyProducerId", producerId);
+            const certificates = safety?.gpsr_certificates ?? product.product_safety_certificate_ids;
+            if (certificates != null) {
+                setValue("productSafetyCertificateIds", (Array.isArray(certificates) ? certificates : [certificates])
+                    .map(normalizeIdValue).filter((value): value is number => typeof value === "number"));
+            }
+            setOfferGroups({ categoryId: productCategoryId, ids: phoneOfferGroupIds(product) });
+            setValue("category_id", productCategoryId);
+            setPendingOffer({ id, product });
+            const imported: string[] = ["category_id"];
+            if (shoperFieldWasProvided(pl?.name)) imported.push("name");
+            if (shoperFieldWasProvided(pl?.active) || shoperFieldWasProvided(product.active)) imported.push("active");
+            if (shoperFieldWasProvided(product.code)) imported.push("SKU");
+            if (shoperFieldWasProvided(product.producer_id)) imported.push("producer");
+            if (shoperFieldWasProvided(stock?.price)) imported.push("price");
+            if (shoperFieldWasProvided(stock?.stock)) imported.push("stock");
+            if (typeof producerId === "number") imported.push("productSafetyProducerId");
+            if (shoperFieldWasProvided(certificates)) imported.push("productSafetyCertificateIds");
+            markImportedFields(imported);
+        } catch (error) {
+            importingOffer.current = false;
+            toast.error(getApiErrorMessage(error, "Nie udało się pobrać produktu Shoper."));
+        } finally {
+            setLoadingShoperOffer(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!pendingOffer || Number(categoryId) !== Number(pendingOffer.product.category_id) ||
+            categoryGroups.loading || phoneAttributes.loading) return;
+        if (phoneAttributes.error) {
+            importingOffer.current = false;
+            setPendingOffer(null);
+            toast.error(phoneAttributes.error);
+            return;
+        }
+        const values = phoneOfferFormAttributes(pendingOffer.product, phoneAttributes.attributes);
+        const newlyHydrated: string[] = [];
+        for (const [key, value] of Object.entries(values)) {
+            if (hydratedOfferFields.current.has(key)) continue;
+            setValue(key as Path<IFormInput>, value as PathValue<IFormInput, Path<IFormInput>>);
+            hydratedOfferFields.current.add(key);
+            newlyHydrated.push(key);
+        }
+        if (newlyHydrated.length) markImportedFields(newlyHydrated);
+        if (!completedOfferImport.current) {
+            const translations = pendingOffer.product.translations as Record<string, any> | undefined;
+            const hasDescription = [translations?.pl_PL, translations?.cs_CZ, translations?.sk_SK]
+                .some(translation => translation?.description != null);
+            if (hasDescription) importedDescriptionSignature.current = phoneDescriptionSignature(getValues());
+            if (translations?.pl_PL?.description != null) setValue("description", String(translations.pl_PL.description));
+            if (translations?.cs_CZ?.description != null) setValue("descriptionCZ", String(translations.cs_CZ.description));
+            if (translations?.sk_SK?.description != null) setValue("descriptionSK", String(translations.sk_SK.description));
+            markImportedFields([
+                ...(shoperFieldWasProvided(translations?.pl_PL?.description) ? ["description"] : []),
+                ...(shoperFieldWasProvided(translations?.cs_CZ?.description) ? ["descriptionCZ"] : []),
+                ...(shoperFieldWasProvided(translations?.sk_SK?.description) ? ["descriptionSK"] : []),
+            ]);
+            completedOfferImport.current = true;
+            setLoadedOfferId(pendingOffer.id);
+            toast.success("Dane produktu Shoper zostały pobrane.");
+        } else if (importedDescriptionSignature.current) {
+            importedDescriptionSignature.current = phoneDescriptionSignature(getValues());
+        }
+        importingOffer.current = false;
+    }, [pendingOffer, categoryId, categoryGroups.loading, phoneAttributes.loading, phoneAttributes.attributes,
+        hasCategoryAttributeGroup, manualAttributeGroupId, getValues, setValue, markImportedFields]);
+
+    const handleUpdateProduct = async (data: IFormInput) => {
+        if (!loadedOfferId || Number(shoperOfferId.trim()) !== loadedOfferId) {
+            toast.error("Najpierw pobierz produkt Shoper po ID.");
+            return;
+        }
+        if (categoryGroups.loading || phoneAttributes.loading || phoneAttributes.error || !phoneAttributes.attributes.length) {
+            toast.error(phoneAttributes.error || "Poczekaj na pobranie atrybutów Shoper.");
+            return;
+        }
+        if (selectedImages.length && imageLinks.length !== selectedImages.length) {
+            toast.error("Poczekaj na przygotowanie wybranych zdjęć.");
+            return;
+        }
+        setUpdatingProduct(true);
+        try {
+            const original = pendingOffer?.id === loadedOfferId ? pendingOffer.product : null;
+            const originalStock = original?.stock as Record<string, unknown> | undefined;
+            const safetyProducerId = normalizeIdValue(data.productSafetyProducerId);
+            const safetyCertificateIds = (data.productSafetyCertificateIds ?? [])
+                .map(normalizeIdValue).filter((value): value is number => typeof value === "number");
+            await UpdateProductShoper({
+                productId: loadedOfferId,
+                basePayload: {
+                    producer_id: data.producer,
+                    category_id: data.category_id,
+                    code: data.SKU,
+                    pkwiu: original?.pkwiu ?? "-",
+                    stock: { price: data.price, active: originalStock?.active ?? 1, stock: data.stock,
+                        delivery_id: originalStock?.delivery_id ?? 1 },
+                    attributes: buildPhoneShoperAttributes(phoneAttributes.attributes, data, false),
+                    gauge_id: original?.gauge_id ?? 5,
+                    ...(safetyProducerId ? { product_safety_producer_id: safetyProducerId } : {}),
+                    ...(safetyCertificateIds.length ? { product_safety_certificate_ids: safetyCertificateIds } : {}),
+                    ...(relatedPackId ? { related_pack_id: relatedPackId } : {}),
+                },
+                translations: {
+                    pl_PL: { name: data.name, description: data.description, active: data.active },
+                    ...(data.descriptionCZ ? { cs_CZ: { name: nameCZ || data.name, description: data.descriptionCZ, active: data.active } } : {}),
+                    ...(data.descriptionSK ? { sk_SK: { name: nameSK || data.name, description: data.descriptionSK, active: data.active } } : {}),
+                },
+                props,
+            });
+            if (selectedImages.length) await AddImageShoper(loadedOfferId, selectedImages, imageLinks, props);
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu Shoper.", phoneAttributes.attributes));
+        } finally {
+            setUpdatingProduct(false);
+        }
+    };
+
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
         try {
+            if (categoryGroups.loading || phoneAttributes.loading || phoneAttributes.error || !phoneAttributes.attributes.length ||
+                (!hasCategoryAttributeGroup && !manualAttributeGroupId)) {
+                throw new Error(phoneAttributes.error || "Wybierz grupę atrybutów kategorii i poczekaj na pobranie atrybutów Shoper.");
+            }
+            const shoperAttributes = buildPhoneShoperAttributes(phoneAttributes.attributes, data);
             //dodaj zdjęcia do apilo
-            try {
+            if (addToApilo) try {
                 for (let i = 0; i < selectedImages.length; i++) {
                     const formData = new FormData();
                     formData.append("file", selectedImages[i]); // Dodajemy plik do formData
@@ -268,7 +447,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                         }
                     );
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
@@ -320,30 +498,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     stock: data.stock,
                     delivery_id: 1
                 },
-                attributes: {
-                    307: "24 miesiące",
-                    291: data.status,
-                    929: data.connection,
-                    928: data.model,
-                    925: data.frontCamera + "Mpx",
-                    924: data.backCamera + "Mpx",
-                    923: data.screen,
-                    922: data.system,
-                    920: data.waterproof,
-                    919: data.dualSim,
-                    917: data.wirelessCharging,
-                    916: data.NFC,
-                    915: data.G5,
-                    914: data.resolution + " px",
-                    902: data.matrixGrade,
-                    901: data.cpu,
-                    900: data.batteryCapacity + " mAh",
-                    899: data.diagonal + `"`,
-                    897: data.ramAmount,
-                    898: data.diskSize
-
-
-                },
+                attributes: shoperAttributes,
                 gauge_id: 5,
                 ...(Object.keys(safetyInformation).length
                     ? { safety_information: safetyInformation }
@@ -355,6 +510,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     Authorization: `Bearer ${props.authToken}`
                 }
             });
+            if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
                     sku: data.SKU.toUpperCase()
@@ -401,8 +557,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
-            toast.success("Produkt " + response.data + " został pomyślnie dodany.");
-
             let ApiloAddedProductsFirstKey = Object.keys(apiloResponse.data.products)[0];
 
 
@@ -417,7 +571,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             "type": 9,
                             "values": [
                                 {
-                                    "value": `<p>✅ Stan matrycy -   <b>${matrixGrade}</b> (${monitorVC[matrixGrade]})</p><p>${additionalInfo}</p>`
+                                    "value": `<p>✅ Stan matrycy - <b>${formatPhoneMatrixGrade(matrixGrade, monitorVC[matrixGrade])}</b></p><p>${additionalInfo}</p>`
                                 }
                             ]
                         },
@@ -434,12 +588,12 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                         <li><b>RAM:</b> ${data.ramAmount}</li>
                                         <li><b>Pamięć:</b> ${data.diskSize}</li>
                                         <li><b>Ekran:</b> przekątna ${data.diagonal}", ${data.screen} ${data.screenName}, rozdzielczość: ${data.resolution}</li>
-                                        <li><b>Aparat:</b> tył: ${data.backCamera} px, przód: ${data.frontCamera} px, ${data.lens_ultraWide ? "obiektyw szerokokątny, " : ""} ${data.lens_tele ? "teleobiektyw, " : ""} ${data.lens_lidar ? "czujnik głębi (LIDAR)" : ""}</li>
-                                        <li><b>Łączność:</b> Bluetooth, ${data.G5 ? "5G, " : ""} ${data.NFC ? "NFC" : ""} WIFI</li>
+                                        <li><b>Aparat:</b> tył: ${data.backCamera} px, przód: ${data.frontCamera} px, ${isPhoneEnabled(data.lens_ultraWide) ? "obiektyw szerokokątny, " : ""} ${isPhoneEnabled(data.lens_tele) ? "teleobiektyw, " : ""} ${isPhoneEnabled(data.lens_lidar) ? "czujnik głębi (LIDAR)" : ""}</li>
+                                        <li><b>Łączność:</b> Bluetooth, ${isPhoneEnabled(data.G5) ? "5G, " : ""} ${isPhoneEnabled(data.NFC) ? "NFC" : ""} WIFI</li>
                                         <li><b>System:</b> ${data.system}</li>
-                                        <li><b>Ładowanie:</b> ${data.wirelessCharging ? "bezprzewodowe, przewodowe" : "przewodowe"}</li>
+                                        <li><b>Ładowanie:</b> ${isPhoneEnabled(data.wirelessCharging) ? "bezprzewodowe, przewodowe" : "przewodowe"}</li>
                                         <li><b>Złącze:</b> ${data.connection}</li>
-                                        <li><b>${data.dualSim ? "Dual sim:" : "Rodzaj karty SIM"}</b>  ${data.simType} </li>
+                                        <li><b>${isPhoneEnabled(data.dualSim) ? "Dual sim:" : "Rodzaj karty SIM"}</b>  ${data.simType} </li>
                                         <li><b>Pojemność baterii:</b> ${data.batteryCapacity}mAh</li>
 
                                     </ul>
@@ -457,6 +611,10 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
+            }
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -477,7 +635,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             Authorization: `Bearer ${props.authToken}`
                         }
                     });
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane`);
                 } catch (error) {
                     console.error("Image upload error:", error);
                     toast.error("Błąd podczas dodawania zdjęcia");
@@ -488,10 +645,10 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(getShoperErrorMessage(error, phoneAttributes.attributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił błąd podczas dodawania produktu");
+                toast.error(error instanceof Error ? error.message : getShoperErrorMessage(error, phoneAttributes.attributes));
             }
 
         };
@@ -505,14 +662,14 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
     let screen = watch("screen", "");
     let battery = watch("battery", "");
     let additionalInfo = watch("additionalInfo", "");
-    let G5 = watch("G5", false);
-    let NFC = watch("NFC", false);
-    let wirelessCharging = watch("wirelessCharging", false);
-    let waterproof = watch("waterproof", false);
-    let dualSim = watch("dualSim", false);
-    let lens_ultraWide = watch("lens_ultraWide", false);
-    let lens_tele = watch("lens_tele", false);
-    let lens_lidar = watch("lens_lidar", false);
+    let G5 = isPhoneEnabled(watch("G5", false));
+    let NFC = isPhoneEnabled(watch("NFC", false));
+    let wirelessCharging = isPhoneEnabled(watch("wirelessCharging", false));
+    let waterproof = isPhoneEnabled(watch("waterproof", false));
+    let dualSim = isPhoneEnabled(watch("dualSim", false));
+    let lens_ultraWide = isPhoneEnabled(watch("lens_ultraWide", false));
+    let lens_tele = isPhoneEnabled(watch("lens_tele", false));
+    let lens_lidar = isPhoneEnabled(watch("lens_lidar", false));
     let screenName = watch("screenName", "")
     let matrixGrade = watch("matrixGrade", "")
     let resolution = watch("resolution", "")
@@ -532,7 +689,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         waterproof,
         screenName,
         screen,
-        monitorVC_SK[matrixGrade],
+        monitorVC_SK[matrixGrade] || matrixGrade,
         resolution,
         diagonal,
         lens_ultraWide,
@@ -552,7 +709,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         waterproof,
         screenName,
         screen,
-        monitorVC_CZ[matrixGrade],
+        monitorVC_CZ[matrixGrade] || matrixGrade,
         resolution,
         diagonal,
         lens_ultraWide,
@@ -571,7 +728,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         waterproof,
         screenName,
         screen,
-        matrixGrade + "(" + monitorVC[matrixGrade] + ")",
+        formatPhoneMatrixGrade(matrixGrade, monitorVC[matrixGrade]),
         resolution,
         diagonal,
         lens_ultraWide,
@@ -582,6 +739,9 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         frontCamera
     ));
     useEffect(() => {
+        if (importingOffer.current) return;
+        if (importedDescriptionSignature.current === phoneDescriptionSignature(getValues())) return;
+        importedDescriptionSignature.current = null;
         setValue("descriptionSK", AndroidTemplateSK(
             additionalInfoSK,
             G5,
@@ -591,7 +751,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
             waterproof,
             screenName,
             screen,
-            monitorVC_SK[matrixGrade],
+            monitorVC_SK[matrixGrade] || matrixGrade,
             resolution,
             diagonal,
             lens_ultraWide,
@@ -611,7 +771,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
             waterproof,
             screenName,
             screen,
-            monitorVC_CZ[matrixGrade],
+            monitorVC_CZ[matrixGrade] || matrixGrade,
             resolution,
             diagonal,
             lens_ultraWide,
@@ -630,7 +790,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
             waterproof,
             screenName,
             screen,
-            matrixGrade + "(" + monitorVC[matrixGrade] + ")",
+            formatPhoneMatrixGrade(matrixGrade, monitorVC[matrixGrade]),
             resolution,
             diagonal,
             lens_ultraWide,
@@ -671,12 +831,22 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
     return (
         <>
             <div className="addProductMainContainer">
-                <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <ShoperImportedFieldStyles fields={importedFields} />
                     <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                     <Box
                         sx={{ py: 2, display: 'grid', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
                     >
                         <ThemeProvider theme={MainTheme}>
+                            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                                <TextField size="small" label="ID produktu Shoper" type="number" value={shoperOfferId}
+                                    onChange={event => { setShoperOfferId(event.target.value); setLoadedOfferId(null); setPendingOffer(null); importingOffer.current = false; }}
+                                    disabled={loadingShoperOffer} fullWidth />
+                                <Button type="button" variant="outlined" onClick={handleFetchShoperOffer}
+                                    disabled={loadingShoperOffer} sx={{ minWidth: 100, alignSelf: "stretch" }}>
+                                    {loadingShoperOffer ? "Pobieranie..." : "Pobierz"}
+                                </Button>
+                            </Box>
                             <FormControl fullWidth >
                                 <InputLabel>język opisu</InputLabel>
                                 <Select
@@ -691,10 +861,10 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                 </Select>
                             </FormControl>
                             <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
-                            <TextField label="SKU" {...register("SKU")} />
-                            <TextField label="Ilość" type="number"{...register("stock")} />
-                            <TextField label="Cena" type="number"{...register("price")} />
-                            <TextField label="Tytuł" type="text"{...register("name", {
+                            <TextField label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
+                            <TextField label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
+                            <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
+                            <TextField label="Tytuł" type="text" InputLabelProps={{ shrink: true }} {...register("name", {
                                 onBlur: async (e) => {
                                     const value = e.target.value;
 
@@ -708,7 +878,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                     }
                                 }
                             })} />
-                            <TextField label="Model" type="text"{...register("model")} />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="model" label="Model" />
 
                             <Autocomplete
                                 renderOption={(props, option) => (
@@ -724,14 +894,25 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
 
                                 getOptionLabel={(option) => option?.translations?.pl_PL?.name || "Nieznana kategoria"}
                                 isOptionEqualToValue={(option, value) => option?.category_id === value?.category_id} // Zapobiega warningom
-                                renderInput={(params) => <TextField {...params} label="Kategoria" />}
+                                renderInput={(params) => <TextField {...params} name="category_id" label="Kategoria" />}
+                                value={selectedCategory ?? null}
                                 onChange={(event, value) => {
                                     setValue("category_id", value?.category_id || 0);
                                 }}
                             />
+                            {categoryId && categoryGroups.loading ? <Typography variant="body2">Sprawdzanie grup atrybutów kategorii...</Typography> : null}
+                            {categoryId && !categoryGroups.loading && !hasCategoryAttributeGroup ? (
+                                <PhoneGroupPicker groups={availableGroups.groups.filter(group => group.attribute_group_id !== PHONE_ATTRIBUTE_GROUP_ID)} value={manualAttributeGroupId}
+                                    onChange={setManualAttributeGroupId} error={categoryGroups.error || availableGroups.error} loading={availableGroups.loading} />
+                            ) : null}
+                            {categoryId ? <Typography variant="body2" color={phoneAttributes.error ? "error" : "text.secondary"}>
+                                {phoneAttributes.error || (categoryGroups.loading || phoneAttributes.loading ? "Pobieranie atrybutów Shoper..." :
+                                    phoneAttributes.attributes.length ? `Atrybuty Shoper (grupy ${groupIds.join(", ")}): ${phoneAttributes.attributes.length}. Brakujące: ${missingPhoneAttributes(phoneAttributes.attributes).join(", ") || "brak"}` : `Grupy ${groupIds.join(", ")} nie zawierają atrybutów.`)}
+                            </Typography> : null}
 
                             <Autocomplete
                                 options={producers}
+                                value={producers.find(producer => producer.producer_id === Number(watch("producer"))) ?? null}
                                 getOptionLabel={(option) => option?.name ?? ""}
                                 isOptionEqualToValue={(option, value) => option.producer_id === value.producer_id}
                                 renderOption={(props, option, index) => (
@@ -739,7 +920,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                         {option.name}
                                     </li>
                                 )}
-                                renderInput={(params) => <TextField {...params} label="Producent" />}
+                                renderInput={(params) => <TextField {...params} name="producer" label="Producent" />}
                                 onChange={(_, value) => {
                                     setValue("producer", value?.producer_id || 0);
                                 }}
@@ -755,6 +936,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                     defaultValue={0}
                                     render={({ field }) => (
                                     <Select
+                                        name={field.name}
                                         labelId="product-safety-producer-label"
                                         label="Product Safety Producer"
                                         value={field.value ?? 0}
@@ -790,6 +972,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                                     defaultValue={[]}
                                     render={({ field }) => (
                                         <Select
+                                            name={field.name}
                                             multiple
                                             labelId="product-safety-certificates-label"
                                             label="Product Safety Certificates"
@@ -835,205 +1018,68 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             </FormControl>
 
 
-                            <FormControl fullWidth >
-                                <InputLabel>stan matrycy</InputLabel>
-                                <Select
-                                    label="stan matrycy"
-                                    {...register("matrixGrade")}
-                                >
-                                    <MenuItem value="Klasa A">Klasa A</MenuItem>
-                                    <MenuItem value="Klasa A-">Klasa A-</MenuItem>
-                                    <MenuItem value="Klasa B">Klasa B-</MenuItem>
-                                    <MenuItem value="Klasa C">Klasa C</MenuItem>
-
-                                </Select>
-                            </FormControl>
-
-
-                            <FormControl fullWidth >
-                                <InputLabel>stan</InputLabel>
-                                <Select
-                                    label="stan"
-                                    {...register("status")}
-                                >
-                                    <MenuItem value="Poleasingowy">Poleasingowy</MenuItem>
-                                    <MenuItem value="Używany">Używany</MenuItem>
-                                    <MenuItem value="Nowy">Nowy</MenuItem>
-                                    <MenuItem value="Po zwrocie">Po zwrocie</MenuItem>
-                                    <MenuItem value="Powystawowy">Powystawowy</MenuItem>
-                                    <MenuItem value="Uszkodzony">Uszkodzony</MenuItem>
-                                    <MenuItem value="Odnowiony przez producenta">Odnowiony przez producenta</MenuItem>
-                                    <MenuItem value="Odnowiony przez sprzedawcę">Odnowiony przez sprzedawcę</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <TextField
-                                label="Uwagi"
-                                type="text"
-                                {...register("additionalInfo", {
-                                    onBlur: async (e) => {
-                                        const value = e.target.value;
-
-                                        try {
-                                            setAdditionalInfoCZ(await handleTranslateCZ(value))
-                                            setAdditionalInfoSK(await handleTranslateSK(value))
-                                            toast.success("przetłumaczono");
-                                        } catch (error) {
-                                            console.error("Błąd podczas tłumaczenia:", error);
-                                            toast.error("błąd w tłumaczeniu");
-                                        }
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="matrixGrade" label="Stan matrycy" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="caseGrade" label="Stan obudowy" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="additionalInfo" label="Uwagi"
+                                onBlurValue={async value => {
+                                    try {
+                                        setAdditionalInfoCZ(await handleTranslateCZ(value));
+                                        setAdditionalInfoSK(await handleTranslateSK(value));
+                                        toast.success("przetłumaczono");
+                                    } catch (error) {
+                                        console.error("Błąd podczas tłumaczenia:", error);
+                                        toast.error("błąd w tłumaczeniu");
                                     }
-                                })}
-                            />
-                            <TextField label="aparat przedni (liczba MPX)" type="text"{...register("frontCamera")} />
-                            <TextField label="aparat tylni (liczba MPX)" type="text"{...register("backCamera")} />
-                            <FormControl fullWidth >
-                                <InputLabel>Typ ekranu</InputLabel>
-                                <Select {...register("screen")} label="Typ ekranu">
-                                    <MenuItem value="LCD">LCD</MenuItem>
-                                    <MenuItem value="OLED">OLED</MenuItem>
-                                    <MenuItem value="IPS">IPS</MenuItem>
-                                </Select>
-                            </FormControl>
+                                }} />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="frontCamera" label="Aparat przedni (MPX)" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="backCamera" label="Aparat tylny (MPX)" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="screen" label="Typ ekranu" />
 
-                            <TextField label="nazwa ekranu" type="text"{...register("screenName")} />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="screenName" label="Nazwa ekranu" />
 
-                            <FormControl fullWidth >
-                                <InputLabel>System</InputLabel>
-                                <Select {...register("system")} label="System">
-                                    <MenuItem value="Android 4.4">Android 4.4</MenuItem>
-                                    <MenuItem value="Android 5">Android 5</MenuItem>
-                                    <MenuItem value="Android 6">Android 6</MenuItem>
-                                    <MenuItem value="Android 7">Android 7</MenuItem>
-                                    <MenuItem value="Android 8">Android 8</MenuItem>
-                                    <MenuItem value="Android 9">Android 9</MenuItem>
-                                    <MenuItem value="Android 10">Android 10</MenuItem>
-                                    <MenuItem value="Android 11">Android 11</MenuItem>
-                                    <MenuItem value="Android 12">Android 12</MenuItem>
-                                    <MenuItem value="Android 13">Android 13</MenuItem>
-                                    <MenuItem value="Android 14">Android 14</MenuItem>
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="system" label="System" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="waterproof" label="Wodoodporność" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="dualSim" label="Dual SIM" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="wirelessCharging" label="Ładowanie bezprzewodowe" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="NFC" label="NFC" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="G5" label="5G" checkbox />
 
-                                </Select>
-                            </FormControl>
-                            <FormControlLabel control={<Checkbox  {...register("waterproof")} />} label="Wodoodporność" />
-                            <FormControlLabel control={<Checkbox  {...register("dualSim")} />} label="Dual sim" />
-                            <FormControlLabel control={<Checkbox  {...register("wirelessCharging")} />} label="Ładowanie bezprzewodowe" />
-                            <FormControlLabel control={<Checkbox  {...register("NFC")} />} label="NFC" />
-                            <FormControlLabel control={<Checkbox  {...register("G5")} />} label="5G" />
-
-                            <FormControlLabel control={<Checkbox  {...register("lens_ultraWide")} />} label="obiektyw szerokokątny" />
-                            <FormControlLabel control={<Checkbox  {...register("lens_tele")} />} label="teleobiektyw" />
-                            <FormControlLabel control={<Checkbox  {...register("lens_lidar")} />} label="czujnik głębi (LIDAR)" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="lens_ultraWide" label="Obiektyw szerokokątny" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="lens_tele" label="Teleobiektyw" checkbox />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="lens_lidar" label="Czujnik głębi (LIDAR)" checkbox />
 
 
-                            <TextField label="Rozdzielczość" type="text"{...register("resolution")} />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="resolution" label="Rozdzielczość" />
 
-                            <FormControl fullWidth>
-                                <InputLabel>złącze</InputLabel>
-                                <Select
-                                    {...register("connection")}
-                                    label="złącze"
-                                >
-                                    <MenuItem value="USB-C">USB-C</MenuItem>
-                                    <MenuItem value="micro USB">micro USB</MenuItem>
-                                </Select>
-                            </FormControl>
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="connection" label="Złącze" />
 
-                            <FormControl fullWidth>
-                                <InputLabel>Rodzaj karty SIM</InputLabel>
-                                <Select
-                                    {...register("simType")}
-                                    label="Rodzaj karty SIM"
-                                >
-                                    <MenuItem value="nanoSIM">nanoSIM</MenuItem>
-                                    <MenuItem value="microSIM">microSIM</MenuItem>
-                                    <MenuItem value="miniSIM">miniSIM</MenuItem>
-                                    <MenuItem value="eSIM">eSIM</MenuItem>
-                                    <MenuItem value="nanoSIM + eSIM"> nanoSIM + eSIM</MenuItem>
-                                    <MenuItem value="nanoSIM + nanoSIM"> nanoSIM + nanoSIM</MenuItem>
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="simType" label="Rodzaj karty SIM" />
 
-                                    <MenuItem value="brak">brak</MenuItem>
-                                </Select>
-                            </FormControl>
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="cpu" label="Procesor" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="batteryCapacity" label="Pojemność baterii (mAh)" inputType="number" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="batteryStatus" label="Kondycja baterii (%)" inputType="number" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="diagonal" label="Przekątna ekranu (cale)" />
 
-                            <FormControl fullWidth >
-                                <InputLabel>Klasa wizualna</InputLabel>
-                                <Select {...register("grade")} label="Klasa wizualna">
-                                    <MenuItem value="Klasa A">Klasa A</MenuItem>
-                                    <MenuItem value="Klasa B">Klasa B</MenuItem>
-                                    <MenuItem value="Klasa C">Klasa C</MenuItem>
-                                    <MenuItem value="Klasa A-">Klasa A-</MenuItem>
-                                    <MenuItem value="Powystawowy">Powystawowy </MenuItem>
-                                </Select>
-                            </FormControl>
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="diskSize" label="Pojemność dysku" />
+                            <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="ramAmount" label="Pamięć RAM" />
 
-                            <TextField label="Procesor" type="text"{...register("cpu")} />
-                            <TextField label="Pojemość baterii(mAh)" type="number"{...register("batteryCapacity")} />
-                            <TextField label="przekątna ekranu(cale)" type="text"{...register("diagonal")} />
-
-                            <FormControl fullWidth >
-                                <InputLabel>Pojemność dysku</InputLabel>
-                                <Select {...register("diskSize")} label="Pojemność dysku">
-                                    <MenuItem value="16GB">16GB</MenuItem>
-                                    <MenuItem value="24GB">24GB</MenuItem>
-                                    <MenuItem value="32GB">32GB</MenuItem>
-                                    <MenuItem value="64GB">64GB</MenuItem>
-                                    <MenuItem value="128GB">128GB</MenuItem>
-                                    <MenuItem value="256GB">256GB</MenuItem>
-                                    <MenuItem value="512GB">512GB</MenuItem>
-                                    <MenuItem value="1TB">1TB</MenuItem>
-                                </Select>
-                            </FormControl>
-
-                            <FormControl fullWidth >
-                                <InputLabel>Ilość pamięci Ram</InputLabel>
-                                <Select {...register("ramAmount")} label="Ilość pamięci Ram">
-                                    <MenuItem value="1GB">1GB</MenuItem>
-                                    <MenuItem value="2GB">2GB</MenuItem>
-                                    <MenuItem value="3GB">3GB</MenuItem>
-                                    <MenuItem value="4GB">4GB</MenuItem>
-                                    <MenuItem value="5GB">5GB</MenuItem>
-                                    <MenuItem value="6GB">6GB</MenuItem>
-                                    <MenuItem value="7GB">7GB</MenuItem>
-                                    <MenuItem value="8GB">8GB</MenuItem>
-                                    <MenuItem value="9GB">9GB</MenuItem>
-                                    <MenuItem value="10GB">10GB</MenuItem>
-                                    <MenuItem value="11GB">11GB</MenuItem>
-                                    <MenuItem value="12GB">12GB</MenuItem>
-                                    <MenuItem value="13GB">13GB</MenuItem>
-                                    <MenuItem value="14GB">14GB</MenuItem>
-                                    <MenuItem value="15GB">15GB</MenuItem>
-                                    <MenuItem value="16GB">16GB</MenuItem>
-                                    <MenuItem value="24GB">24GB</MenuItem>
-                                </Select>
-                            </FormControl>
+                            <PhoneAdditionalShoperFields control={control} attributes={phoneAttributes.attributes} />
 
 
                             <label >opis</label>
                             <textarea defaultValue={AndroidTemplate('', false, false, false, false, false, "", "", '', '', '', false, false, false, '', '', '')}  {...register("description")} />
                             <textarea defaultValue={AndroidTemplateCZ('', false, false, false, false, false, "", "", '', '', '', false, false, false, '', '', '')}  {...register("descriptionCZ")} />
                             <textarea defaultValue={AndroidTemplateSK('', false, false, false, false, false, "", "", '', '', '', false, false, false, '', '', '')}  {...register("descriptionSK")} />
-                            <label>Dodaj zdjęcia</label>
-                            <Button
-                                variant="contained"
-                                component="label"
-                            >
-                                Dodaj zdjęcia
-                                <input
-                                    style={{ width: '100%' }}
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    hidden
-                                />
-                            </Button>
-
-                            <Typography>
-                                {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                            </Typography>
+                            <ProductImageManager {...images} />
 
                             <Button variant="outlined" type="reset"  >Reset formularza</Button>
-                            <Button variant="contained" type="submit" >Dodaj</Button>
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                            </ApiloSubmitControls>
+                            <Button variant="outlined" type="button" disabled={!loadedOfferId || updatingProduct || loadingShoperOffer || !images.imagesReady || images.uploadingImages}
+                                onClick={handleSubmit(handleUpdateProduct)}>
+                                {updatingProduct ? "Aktualizowanie..." : "Zaktualizuj produkt Shoper"}
+                            </Button>
                         </ThemeProvider>
                     </Box>
                 </form>

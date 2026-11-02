@@ -1,11 +1,11 @@
 import axios from "axios";
 import { useForm, SubmitHandler, useWatch, Controller } from "react-hook-form";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./addProducts.css";
 import 'setimmediate';
-import { handleImageUpload } from "../image-host";
+import { ProductImageManager, useProductImages } from "./productImageManager";
 import {
     TextField,
     Button,
@@ -40,10 +40,16 @@ import { gamingTemplateCZ } from "./templatesCZ/gamingTemplateCZ";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
+import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { getCreatedShoperProductId, getExactApiloProductId } from "./gamingProductTargets";
 
 type AddProductProps = {
     authToken: string
     accessTokenAllegro: string
+    allegroAccountId?: string
 }
 
 interface IFormInput {
@@ -80,16 +86,22 @@ interface IFormInput {
 function AddGamingPC(props: AddProductProps) {
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
-    const { register, handleSubmit, setValue, watch, control } = useForm<IFormInput>();
+    const submissionInProgress = useRef(false);
+    const { register, handleSubmit, setValue, watch, control, getValues } = useForm<IFormInput>();
+    const gameGraphicsAttribute = attributeList.find(
+        attribute => attribute.name.trim().toLocaleLowerCase("pl-PL") === "wyłącz grafiki z grami"
+    );
+    const disableGameGraphics = gameGraphicsAttribute != null && watch("disableGameGraphics", false) === true;
     const [descriptionValue, setDescriptionValue] = useState<string>('');
-    const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const images = useProductImages();
+    const { selectedImages, imageLinks } = images;
+    const [addToApilo, setAddToApilo] = useState(true);
     const [editorState, setEditorState] = useState(EditorState.createEmpty());
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [relatedPackId, setRelatedPackId] = useState("");
     const [attributeGroup, setAttributeGroup] = useState<any>(null);
-    const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [producer, setProducer] = useState<ProducersResource[]>([]);
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
@@ -138,6 +150,8 @@ function AddGamingPC(props: AddProductProps) {
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
     const [additionalInfoSK, setAdditionalInfoSK] = useState("");
     const [lockedParams, setLockedParams] = useState<Set<string>>(new Set());
+    const [responsibleData, setResponsibleData] = useState<ResponsibleResponse | undefined>(undefined);
+    const [responsibleProducerId, setResponsibleProducerId] = useState<string>("");
 
     const handleSearch = async () => {
         try {
@@ -151,6 +165,27 @@ function AddGamingPC(props: AddProductProps) {
             setShowSearchresult(true)
         } catch (error) {
             console.error('Błąd wyszukiwania produktu:', error);
+        }
+    };
+
+    const handleGetResponsiblePrducers = async () => {
+        if (!props.accessTokenAllegro) {
+            console.warn("Brak accessTokenAllegro – pomijam pobranie responsibleProducers");
+            return;
+        }
+
+        try {
+            const response = await axios.get(`${API_URL}/product/responsibleProducers`, {
+                params: { allegroAccountId: props.allegroAccountId },
+                headers: {
+                    Authorization: `Bearer ${props.authToken}`,
+                    "Cache-Control": "no-cache",
+                },
+            });
+            setResponsibleData(response.data);
+        } catch (error) {
+            console.error("Błąd pobierania responsibleProducers:", error);
+            toast.error("Błąd pobierania producentów odpowiedzialnych Allegro.");
         }
     };
 
@@ -223,15 +258,26 @@ function AddGamingPC(props: AddProductProps) {
 
 
     const handleAddAllegroOffer = async () => {
+        if (!responsibleProducerId) {
+            toast.error("Wybierz producenta odpowiedzialnego przed dodaniem oferty Allegro.");
+            return;
+        }
 
-        const token = props.accessTokenAllegro
+        const currentValues = getValues();
+        const currentName = String(currentValues.name || Name || "").trim();
+        if (!currentName) {
+            toast.error("Podaj tytuł przed dodaniem oferty Allegro.");
+            return;
+        }
+
         const productData = {
+            "name": currentName,
 
             "productSet":
                 [{
                     "product":
                     {
-                        "name": Name,
+                        "name": currentName,
                         "category": { "id": "486" },
                         // "id": selectedProductId,   // numer GTIN, MPN lub ID produktu
                         // "idType": "GTIN",         // typ wartości w polu "product.id". 
@@ -242,8 +288,8 @@ function AddGamingPC(props: AddProductProps) {
                         "images": imageLinks,
                     },
                     "responsibleProducer": {
-                        "type": "NAME",                               // typ identyfikatora
-                        "name": "Sprzetowo"                       // nazwa własna danych producenta
+                        "type": "ID",
+                        "id": responsibleProducerId
                     },
                     "safetyInformation": {
                         "type": "TEXT",
@@ -330,13 +376,14 @@ function AddGamingPC(props: AddProductProps) {
             "description": generateDescriptionAllegro(convertedFormData)
         };
 
-        try {
-            const response = await axios.post(
-                `${API_URL}/product/allegroProduct`,
+            try {
+                const response = await axios.post(
+                `${API_URL}/product/allegroProduct/account`,
                 productData,
                 {
+                    params: { allegroAccountId: props.allegroAccountId },
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${props.authToken}`,
                     },
                 }
             );
@@ -346,19 +393,8 @@ function AddGamingPC(props: AddProductProps) {
             if (axios.isAxiosError(error)) {
                 const apiError = error.response?.data;
 
-                const allegroError = apiError?.errors?.[0];
-
-                const userMessage = allegroError?.userMessage || allegroError?.message || error.message;
-                const metadata = allegroError?.metadata;
-
-                let fullMessage = userMessage;
-                if (metadata) {
-                    fullMessage += `\nSzczegóły: ${JSON.stringify(metadata, null, 2)}`;
-                }
-                fullMessage += `\nPełny błąd: ${JSON.stringify(apiError, null, 2)}`;
-
                 console.error("Błąd Allegro:", apiError);
-                toast.error(fullMessage);
+                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
             } else {
                 console.error("Błąd aplikacji:", error);
                 toast.error("Wystąpił nieznany błąd.");
@@ -436,7 +472,10 @@ function AddGamingPC(props: AddProductProps) {
 
 
     useEffect(() => {
+        setResponsibleProducerId("");
+        setResponsibleData(undefined);
         handleGetProducers()
+        handleGetResponsiblePrducers()
         handleGetProductSafetyProducers({
             API_URL,
             authToken: props.authToken,
@@ -448,7 +487,7 @@ function AddGamingPC(props: AddProductProps) {
             setProductSafetyCertificates,
         });
         handleGetAttributeList('65')
-    }, []);
+    }, [props.authToken, props.accessTokenAllegro, props.allegroAccountId]);
 
 
     const onEditorStateChange = (editorState: EditorState) => {
@@ -456,25 +495,6 @@ function AddGamingPC(props: AddProductProps) {
         setDescriptionValue(draftToHtml(convertToRaw(editorState.getCurrentContent())));
         // console.log(descriptionValue)
     };
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-
-        const sortedFiles = files.sort((a, b) => {
-            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-            return numA - numB;
-        });
-        setSelectedImages(sortedFiles);
-    };
-
-    useEffect(() => {
-        if (selectedImages.length > 0) {
-            handleImageUpload(selectedImages).then((uploadedImages) => {
-                setImageLinks(uploadedImages || []);
-            });
-        }
-    }, [selectedImages]);
 
     const handleGetProducers = async () => {
         let allProducers: ProducersResource[] = [];
@@ -587,15 +607,15 @@ function AddGamingPC(props: AddProductProps) {
 
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
-        let cattegoryID = 248
-        if (set != "brak") {
-            cattegoryID = 223
-        }
+        if (submissionInProgress.current) return;
+        submissionInProgress.current = true;
+        const submittedSku = String(data.SKU).trim();
+        const cattegoryID = data.set === "tani" || data.set === "drogi" ? 223 : 321;
         try {
             setLoading(true);
 
             // Dodaj zdjęcia do Apilo
-            for (let i = 0; i < selectedImages.length; i++) {
+            if (addToApilo) for (let i = 0; i < selectedImages.length; i++) {
                 try {
                     const formDataImage = new FormData();
                     formDataImage.append("file", selectedImages[i]);
@@ -612,7 +632,6 @@ function AddGamingPC(props: AddProductProps) {
                     );
 
                     apiloImageUUIDs.push(apiloImageResponse.data.uuid);
-                    toast.success(`Zdjęcie ${i + 1} poprawnie dodane!`);
                 } catch (error) {
                     console.error("Image upload error:", error);
                     toast.error(`Błąd przy zdjęciu ${i + 1}`);
@@ -643,7 +662,7 @@ function AddGamingPC(props: AddProductProps) {
                     {
                         producer_id: data.producer,
                         category_id: cattegoryID,
-                        code: SKU,
+                        code: submittedSku,
                         pkwiu: "-",
                         translations: {
                             pl_PL: {
@@ -688,6 +707,7 @@ function AddGamingPC(props: AddProductProps) {
                             1159: formData['Producent płyty głównej'],
                             1160: formData['Model płyty głównej'],
                             1164: formData['Typ obudowy'],
+                            ...(disableGameGraphics ? { [gameGraphicsAttribute!.attribute_id]: "1" } : {}),
 
                             307: "24 miesiące",
                             291: condition,
@@ -705,17 +725,18 @@ function AddGamingPC(props: AddProductProps) {
                         },
                     }
                 );
-                toast.success("Dodano produkt do Shopera");
             } catch (error) {
                 console.error("Błąd w dodawaniu produktu do Shopera:", error);
-                toast.error("Nie udało się dodać produktu do Shopera");
+                throw error;
             }
+            const productId = getCreatedShoperProductId(shoperResponse.data);
+            toast.success("Dodano produkt do Shopera");
 
             //Dodanie czeskiej i słowackiem wersji do shopera
 
             const updateDescription = async () => {
                 try {
-                    const updateResponse = await axios.put(`${API_URL}/product/${shoperResponse.data}`, {
+                    await axios.put(`${API_URL}/product/${productId}`, {
                         translations: {
                             cs_CZ: {
                                 name: nameCZ,
@@ -729,6 +750,7 @@ function AddGamingPC(props: AddProductProps) {
                             },
                         },
                         attributes: {
+                            ...(disableGameGraphics ? { [gameGraphicsAttribute!.attribute_id]: "1" } : {}),
                             1017: formData['Wielkość pamięci RAM'],
                             1018: formData['Typ pamięci RAM'],
                             1019: formData['Seria'],
@@ -760,27 +782,26 @@ function AddGamingPC(props: AddProductProps) {
                         }
                     });
 
-                    toast.success("Produkt " + updateResponse.data + " update");
+                    toast.success("Produkt został zaktualizowany w Shoperze.");
                 }
                 catch (error) {
                     if (axios.isAxiosError(error)) {
                         console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                        toast.error("Wystąpił błąd podczas update");
                     } else {
                         console.error("Błąd aplikacji:", error);
-                        toast.error("Wystąpił błąd podczas update");
                     }
+                    throw error;
                 }
             }
 
-            updateDescription()
+            await updateDescription()
 
 
-            // Usuwanie starego produktu z Apilo
+            if (addToApilo) {
             try {
                 const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                     params: {
-                        sku: SKU,
+                        sku: submittedSku,
                     },
                     headers: {
                         "Content-Type": "application/json",
@@ -788,55 +809,42 @@ function AddGamingPC(props: AddProductProps) {
                     },
                 });
 
-                if (apiloPrductsListResponse.data.totalCount !== 0) {
-                    await axios.delete(
-                        `${API_URL}/product/apiloProductDelete/${apiloPrductsListResponse.data.products[0].id}`,
-                        {
-                            headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${props.authToken}`,
-                            },
-                        }
-                    );
-                    toast.success("Stary produkt z Apilo usunięty");
+                const existingApiloId = getExactApiloProductId(apiloPrductsListResponse.data, submittedSku);
+                const apiloProduct = {
+                    sku: submittedSku,
+                    name: data.name,
+                    tax: 23,
+                    status: 1,
+                    quantity: Number(data.stock),
+                    priceWithTax: data.price,
+                    description,
+                    images: apiloImageUUIDs,
+                };
+                const requestConfig = {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${props.authToken}`,
+                    },
+                };
+                if (existingApiloId !== null) {
+                    await axios.put(`${API_URL}/product/apilo`, {
+                        ...apiloProduct,
+                        images: apiloImageUUIDs.length ? apiloImageUUIDs : undefined,
+                        targetId: existingApiloId,
+                    }, requestConfig);
+                    toast.success("Produkt został zaktualizowany w Apilo.");
+                } else {
+                    await axios.post(`${API_URL}/product/apilo`, [apiloProduct], requestConfig);
+                    toast.success("Produkt został dodany do Apilo.");
                 }
             } catch (error) {
-                console.error("Błąd przy usuwaniu z Apilo:", error);
-                toast.error("Nie udało się usunąć starego produktu z Apilo");
+                console.error("Błąd przy zastępowaniu produktu w Apilo:", error);
+                toast.error(getApiErrorMessage(error, "Nie udało się bezpiecznie dodać produktu do Apilo."));
             }
-
-            // Dodawanie nowego produktu do Apilo
-            try {
-                const apiloResponse = await axios.post(
-                    `${API_URL}/product/apilo`,
-                    [
-                        {
-                            sku: SKU,
-                            name: data.name,
-                            tax: 23,
-                            status: 1,
-                            quantity: Number(data.stock),
-                            priceWithTax: data.price,
-                            description: description,
-                            images: apiloImageUUIDs,
-                        },
-                    ],
-                    {
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${props.authToken}`,
-                        },
-                    }
-                );
-                toast.success("Produkt dodany do Apilo");
-            } catch (error) {
-                console.error("Błąd przy dodawaniu do Apilo:", error);
-                toast.error("Nie udało się dodać produktu do Apilo");
             }
 
             // Dodawanie zdjęć do Shopera
             try {
-                const productId = shoperResponse?.data;
                 for (let i = 0; i < imageLinks.length; i++) {
                     const image = imageLinks[i];
                     try {
@@ -858,7 +866,6 @@ function AddGamingPC(props: AddProductProps) {
                                 },
                             }
                         );
-                        toast.success(`Zdjęcie ${i + 1} dodane do Shopera`);
                     } catch (error) {
                         console.error("Błąd zdjęcia do Shopera:", error);
                         toast.error(`Błąd przy zdjęciu ${i + 1} w Shoperze`);
@@ -869,16 +876,14 @@ function AddGamingPC(props: AddProductProps) {
                 toast.error("Nie udało się dodać zdjęć do Shopera");
             }
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                console.error("Błąd główny HTTP:", error.response?.status, error.response?.data);
-                toast.error("Błąd HTTP podczas dodawania produktu");
-            } else {
-                console.error("Błąd ogólny:", error);
-                toast.error("Wystąpił nieoczekiwany błąd przy dodawaniu produktu");
-            }
+            console.error("Błąd podczas dodawania produktu gamingowego:", error);
+            toast.error(axios.isAxiosError(error)
+                ? getShoperErrorMessage(error, attributeList)
+                : getApiErrorMessage(error, "Nie udało się zapisać produktu gamingowego."));
         } finally {
             setLoading(false);
             apiloImageUUIDs = [];
+            submissionInProgress.current = false;
         }
     };
     const convertedFormData = useMemo(() => {
@@ -1111,7 +1116,8 @@ function AddGamingPC(props: AddProductProps) {
             ramDescriptionPL, diskDescriptionPL, diskName, diskSrcFinal,
             cpuSeries, gpuTypeFinal, additionalInfo,
             componentsFinal, rtFinal,
-            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set
+            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set,
+            disableGameGraphics
         );
 
         const newDescriptionCZ = gamingTemplateCZ(
@@ -1122,7 +1128,8 @@ function AddGamingPC(props: AddProductProps) {
             ramDescriptionCZ, diskDescriptionCZ, diskName, diskSrcFinal,
             cpuSeries, gpuTypeFinal, additionalInfoCZ,
             componentsFinal, rtFinal,
-            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set
+            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set,
+            disableGameGraphics
         );
 
         const newDescriptionSK = gamingTemplateSK(
@@ -1133,7 +1140,8 @@ function AddGamingPC(props: AddProductProps) {
             ramDescriptionSK, diskDescriptionSK, diskName, diskSrcFinal,
             cpuSeries, gpuTypeFinal, additionalInfoSK,
             componentsFinal, rtFinal,
-            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set
+            powerSupplyModelFinal, ramModelFinal, caseModelFinal, cpuFanModelFinal, set,
+            disableGameGraphics
         );
 
         if (watch("description") !== newDescription) setValue("description", newDescription);
@@ -1143,7 +1151,7 @@ function AddGamingPC(props: AddProductProps) {
         convertedFormData,
         additionalInfo, additionalInfoCZ, additionalInfoSK,
         components, rt,
-        powerSupplyModel, ramModel, caseModel, cpuFanModel, set
+        powerSupplyModel, ramModel, caseModel, cpuFanModel, set, disableGameGraphics
     ]);
 
 
@@ -1217,7 +1225,7 @@ function AddGamingPC(props: AddProductProps) {
                         {/* <TextField required label="SKU" {...register("SKU")} /> */}
                         <TextField required label="SKU" type="text"{...register("SKU")} />
                         <TextField required label="Ilość" type="number"{...register("stock")} />
-                        <TextField required label="Cena" type="number"{...register("price")} />
+                        <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
 
                         <FormControl fullWidth >
                             <InputLabel>Zestaw</InputLabel>
@@ -1384,11 +1392,23 @@ function AddGamingPC(props: AddProductProps) {
                         </FormControl>
 
                         <FormControlLabel control={<Checkbox defaultChecked {...register("rt")} />} label="ray tracing" />
+                        {gameGraphicsAttribute && (
+                            <FormControlLabel
+                                control={<Checkbox {...register("disableGameGraphics")} />}
+                                label="Wyłącz grafiki z grami"
+                            />
+                        )}
                         <TextField label="model zasilacza" type="text"{...register("powerSupplyModel")} />
                         <TextField label="model ramu" type="text"{...register("ramModel")} />
                         <TextField label="model ubudowy" type="text"{...register("caseModel")} />
                         <TextField label="model radiatora" type="text"{...register("cpuFanModel")} />
                         <Typography variant="h4" style={{ textAlign: 'center', margin: '20px' }}>Parametry Allegro</Typography>
+
+                        <ResponsibleProducerSelect
+                            data={responsibleData}
+                            value={responsibleProducerId}
+                            onChange={setResponsibleProducerId}
+                        />
 
                         {[...pcParametersAll]
                             .sort((a, b) => {
@@ -1509,29 +1529,11 @@ function AddGamingPC(props: AddProductProps) {
 
                         <label >opis</label>
                         <textarea defaultValue={gamingTemplate('', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', true, '', '', '', '', '')} />
-                        <Button
-                            className="buttonForm"
-                            variant="contained"
-                            component="label"
-                        >
-                            Dodaj zdjęcia
-                            <input
-                                style={{ width: '100%' }}
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                hidden
-                            />
-                        </Button>
-
-                        <Typography>
-                            {selectedImages.map(file => file.name).join(", ") || "Brak zdjęć"}
-                        </Typography>
-                        <Button variant="contained" type="submit" className="buttonForm">
-                            Dodaj
-                        </Button>
-                        <button type="button" onClick={handleAddAllegroOffer}>Dodaj produkt allegro</button>
+                        <ProductImageManager {...images} />
+                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                            <Button variant="contained" type="submit" className="buttonForm" disabled={loading || !images.imagesReady || images.uploadingImages}>Dodaj</Button>
+                        </ApiloSubmitControls>
+                        <button type="button" onClick={handleAddAllegroOffer} disabled={loading || !images.imagesReady || images.uploadingImages}>Dodaj produkt allegro</button>
                     </ThemeProvider>
                 </Box>
             </form>

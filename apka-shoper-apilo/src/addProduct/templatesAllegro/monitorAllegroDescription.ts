@@ -7,6 +7,7 @@ import {
   monitorCaseVC,
   monitorVC,
 } from "../additionalDescriptions/visualConditionDescriptions";
+import { renderAdditionalFeatureItems } from "../additionalFeatures";
 
 export type MonitorAllegroDescriptionInput = {
   producer: string;
@@ -24,8 +25,10 @@ export type MonitorAllegroDescriptionInput = {
   contrast: string;
   connectors: string;
   hdr: string;
+  speakers?: boolean;
   pivot: string;
   additionalInfo: string;
+  extraFeatures?: string;
   frame: boolean;
   design: boolean;
 };
@@ -227,6 +230,11 @@ export const buildMonitorAllegroDescription = (
     <p><b>🚫 Kabel sygnałowy nie jest dodawany do monitorów.</b></p>
     <p><b>🛒 Kable do kupienia na innych aukcjach.</b></p>`));
 
+  const extraFeatureItems = renderAdditionalFeatureItems(input.extraFeatures ?? "");
+  if (extraFeatureItems) {
+    sections.push(section("monitor-extra-features", undefined, `<h2>Funkcje dodatkowe</h2><ul>${extraFeatureItems}</ul>`));
+  }
+
   const specifications = [
     ["Rozdzielczość", input.resolution],
     ["Przekątna", input.diagonal],
@@ -237,6 +245,7 @@ export const buildMonitorAllegroDescription = (
     ["Kontrast", input.contrast],
     ["Złącza", input.connectors],
     ["HDR", input.hdr],
+    ["Głośniki", input.speakers ? "wbudowane" : ""],
   ]
     .filter(([, value]) => String(value ?? "").trim())
     .map(([label, value]) => `<li>✅ ${label}: ${escapeHtml(value)}</li>`)

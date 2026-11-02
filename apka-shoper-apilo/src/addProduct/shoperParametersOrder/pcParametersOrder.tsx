@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@mui/material";
 import { Controller } from "react-hook-form";
+import { isAdditionalFeaturesName } from "../additionalFeatures";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "różne": "rgb(56 55 77)",
@@ -35,6 +36,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
     "Moduł wifi",
     "Stan wizualny",
     "uwagi",
+    "Dodatkowe cechy",
     "W zestawie"
   ],
   "Złącza i komunikacja": [
@@ -61,6 +63,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
 
   "Parametry obudowy": ["typ obudowy", "Kolor", "Głębokość", "Szerokość produktu", "Wysokość"],
   "AIO": [
+    "Podstawka AIO",
     "Przekątna ekranu",
     "Rozdzielczość",
     "Częstotliwość odświeżania",
@@ -108,6 +111,7 @@ export const AttributeForm: React.FC<AttributeFormProps> = ({
           control={control}
           render={({ field }) => (
             <TextField
+              name={field.name}
               select
               fullWidth
               label={attribute.name}
@@ -141,27 +145,16 @@ export const AttributeForm: React.FC<AttributeFormProps> = ({
             control={control}
             render={({ field }) => (
               <Select
+                name={field.name}
                 labelId={`select-${attribute.attribute_id}-label`}
                 id={`select-${attribute.attribute_id}`}
                 label={attribute.name}
-                value={field.value ?? ""}
+                value={(attribute.options ?? []).some((option: any) => String(option.value ?? "") === String(field.value ?? "")) ? field.value : ""}
                 onChange={(e) => field.onChange(e.target.value)}
                 onBlur={field.onBlur}
                 inputRef={field.ref}
               >
-                {(() => {
-                  const baseOptions = attribute.options ?? [];
-                  const selectedValue = field.value ?? "";
-                  const normalizedSelected = String(selectedValue);
-                  const optionValues = new Set(
-                    baseOptions.map((opt: any) => String(opt.value ?? ""))
-                  );
-                  const extraOption =
-                    normalizedSelected && !optionValues.has(normalizedSelected)
-                      ? [{ option_id: "__custom__", value: normalizedSelected }]
-                      : [];
-                  return [...extraOption, ...baseOptions];
-                })().map((option: any) => (
+                {(attribute.options ?? []).map((option: any) => (
                   <MenuItem key={option.option_id} value={option.value ?? ""}>
                     {option.value}
                   </MenuItem>
@@ -184,6 +177,7 @@ export const AttributeForm: React.FC<AttributeFormProps> = ({
             <FormControlLabel
               control={
                 <Checkbox
+                  name={field.name}
                   checked={!!field.value}
                   onChange={(e) => field.onChange(e.target.checked)}
                   onBlur={field.onBlur}
@@ -199,13 +193,39 @@ export const AttributeForm: React.FC<AttributeFormProps> = ({
 
     if (attribute.type == "0") {
       // TEXT
+      const isAdditionalFeatures = isAdditionalFeaturesName(attribute.name);
+      if (isAdditionalFeatures) {
+        return (
+          <Controller
+            key={attribute.attribute_id}
+            name={`attribute_${attribute.attribute_id}`}
+            control={control}
+            defaultValue=""
+            render={({ field }) => (
+              <TextField
+                name={field.name}
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                inputRef={field.ref}
+                slotProps={{ inputLabel: { shrink: true } }}
+                label={attribute.name}
+                variant="outlined"
+                multiline
+                minRows={3}
+                helperText="Jedna cecha w wierszu. Trafią do opisu Shopera i Allegro."
+                fullWidth
+              />
+            )}
+          />
+        );
+      }
       return (
         <TextField
           slotProps={{ inputLabel: { shrink: true } }}
           key={attribute.attribute_id}
           label={attribute.name}
           variant="outlined"
-          type="text"
           fullWidth
           {...register(`attribute_${attribute.attribute_id}`)}
         />

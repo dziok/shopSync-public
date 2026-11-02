@@ -3,6 +3,7 @@ import { LaptopStatusKey } from "../additionalDescriptions/attributesTranslation
 export type AddProductProps = {
     authToken: string
     accessTokenAllegro: string
+    allegroAccountId?: string
 }
 
 export interface IFormInput {

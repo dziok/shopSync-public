@@ -46,3 +46,9 @@ Requests sent to Allegro identify the application as:
 `shopSync/<version> (+https://github.com/dziok/shopSync-public)`
 
 The URL in the header should point to documentation describing the purpose of the application and the owner-controlled nature of the integration.
+
+## ChatGPT Ads feed on Cloudinary
+
+The backend generates a local CSV from Shoper and publishes a gzip-compressed copy to Cloudinary as a public raw asset. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in the backend environment. Click **Pobierz z Shoper** in the Feed ChatGPT Ads panel to publish it and copy the stable HTTPS `.csv.gz` URL. The backend also refreshes it daily at 04:00 Europe/Warsaw while running. A failed publication leaves the previous Cloudinary version available and reports an error in the panel. The backend can remain on the local network; the feed URL is public and product data is accessible to anyone with the link.
+
+OpenAI's documented Ads product-feed ingestion uses SFTP and accepts `csv.gz`. Verify that your Ads Manager supports URL import before using the Cloudinary link; otherwise upload the generated file by SFTP.

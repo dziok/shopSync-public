@@ -1,3 +1,5 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const LaptopTemplateNew = (
     system: string,
     cpu: string,
@@ -25,7 +27,7 @@ export const LaptopTemplateNew = (
     showWin11info: boolean,
     showBiosPasswordInfo: boolean
 
-) => `
+) => renderConditionalDescription(`
    
     <div id="mainContainer" class="flex-center-column">
         <div class="content-wrapper">
@@ -381,9 +383,6 @@ export const LaptopTemplateNew = (
 
         /* Wspólne klasy */
 
-        .false, .laptop_HDD, .display_nie{
-        display: none !important
-        }
         .flex-center-column {
             display: flex;
             align-items: center;
@@ -919,7 +918,7 @@ export const LaptopTemplateNew = (
     </style>
 
 
-`
+`)
 
 export const batteryDescription: {
     [key: string]: string; // Indeks sygnatury

@@ -1,7 +1,6 @@
 import axios from "axios";
 import { IFormInput } from "../addProduct/addProduct";
 import { API_URL } from "../config";
-import { toast } from "react-toastify";
 type AddProductProps = {
     authToken: string
 }
@@ -72,10 +71,9 @@ export const AddProductShoper = async (data: IFormInput, attributes: {}, nameCZ:
     catch (error) {
         if (axios.isAxiosError(error)) {
             console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-            toast.error("Wystąpił błąd podczas dodawania produktu");
         } else {
             console.error("Błąd aplikacji:", error);
-            toast.error("Wystąpił błąd podczas dodawania produktu");
         }
+        throw error;
     };
 }

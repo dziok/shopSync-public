@@ -27,7 +27,8 @@ export const gamingTemplateSK = (
     ramModel: string,
     caseModel: string,
     cpuFanModel: string,
-    set: string
+    set: string,
+    disableGameGraphics = false
 
 ) => `
   <div class="g_mainContainer">
@@ -43,12 +44,12 @@ export const gamingTemplateSK = (
 </div>
 
         </div>
-        <div class="g_gradientBox">
+        ${!disableGameGraphics ? `<div class="g_gradientBox">
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc1.svg';" src="/userdata/public/assets/gaming/gc1.svg" alt="game" style="width: 28%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc2.svg';" src="/userdata/public/assets/gaming/gc2.svg" alt="game" style="width: 21%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc3.svg';" src="/userdata/public/assets/gaming/gc3.svg" alt="game" style="width: 28%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc4.svg';" src="/userdata/public/assets/gaming/gc4.svg" alt="game" style="width: 20%;"/>
-        </div>
+        </div>` : ""}
 
         <div class="g_specBox2">
             <div class="g_specBox2_c">
@@ -250,12 +251,12 @@ export const gamingTemplateSK = (
                 </p>
             </div>
         </div>
-        <div class="g_gradientBox">
+        ${!disableGameGraphics ? `<div class="g_gradientBox">
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc1.svg';" src="/userdata/public/assets/gaming/gc1.svg" alt="game" style="width: 28%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc2.svg';" src="/userdata/public/assets/gaming/gc2.svg" alt="game" style="width: 21%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc3.svg';" src="/userdata/public/assets/gaming/gc3.svg" alt="game" style="width: 28%;"/>
             <img class="g_gameImg" onerror="this.onerror=null; this.src='../gc4.svg';" src="/userdata/public/assets/gaming/gc4.svg" alt="game" style="width: 20%;"/>
-        </div>
+        </div>` : ""}
 
                             
                 ${set === "drogi" ? `

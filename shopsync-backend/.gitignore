@@ -5,6 +5,7 @@ apilo-settings.json
 related-product.json
 related-products.json
 shoper-delivery-settings.json
+template-settings.json
 .DS_Store
 .env
 .env.*

@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { LoginShoperDto } from "./auth.dto";
 import { ApiloTokenService } from "./apilo-token.service";
@@ -38,15 +38,45 @@ export class AuthController {
   }
 
   @Get("poll-token-prod")
-  async pollAccessToken_prod(@Query("device_code") deviceCodeProd: string) {
-    return this.authService.pollAccessTokenProd(deviceCodeProd);
+  async pollAccessToken_prod(
+    @Query("device_code") deviceCodeProd: string,
+    @Query("label") label = "",
+  ) {
+    return this.authService.pollAccessTokenProd(deviceCodeProd, label);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get("allegro-token-prod")
-  async getSavedAllegroAccessToken() {
+  async getSavedAllegroAccessToken(@Query("accountId") accountId = "") {
     return {
-      access_token: await this.authService.getAllegroProdAccessToken(),
+      access_token: await this.authService.getAllegroProdAccessToken(accountId || undefined),
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("allegro-accounts-prod")
+  async getAllegroAccounts() {
+    return this.authService.getAllegroProdAccounts();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch("allegro-accounts-prod/:accountId")
+  async renameAllegroAccount(
+    @Param("accountId") accountId: string,
+    @Body("label") label: string,
+  ) {
+    return this.authService.renameAllegroProdAccount(accountId, label);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch("allegro-accounts-prod/:accountId/default")
+  async setDefaultAllegroAccount(@Param("accountId") accountId: string) {
+    return this.authService.setDefaultAllegroProdAccount(accountId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete("allegro-accounts-prod/:accountId")
+  async deleteAllegroAccount(@Param("accountId") accountId: string) {
+    return this.authService.deleteAllegroProdAccount(accountId);
   }
 }

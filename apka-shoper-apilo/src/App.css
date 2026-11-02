@@ -8,6 +8,31 @@
   width: 100%;
 }
 
+.app-toasts {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.app-toasts .Toastify__toast {
+  border: 1px solid #454545;
+  border-radius: 6px;
+  box-shadow: 0 8px 28px #0008;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.app-toasts .Toastify__toast--error {
+  --toastify-color-progress-error: #e26666;
+}
+
+.app-toasts .Toastify__close-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .apilo-token-status {
   --status-color: #8b949e;
   align-items: center;

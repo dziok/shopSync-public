@@ -1,6 +1,8 @@
 import { diskTypesDescriptions, ramTypesDescriptions } from "../additionalDescriptions/pcAdditionalDescription"
 
 
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const pcTemplate = (
     title: string,
     grade: string,
@@ -33,7 +35,7 @@ export const pcTemplate = (
     touchScreen: string,
     microphone: string,
     camera: string,
-) => `
+) => renderConditionalDescription(`
 <div id="mainContainer" style="display: flex !important; align-items: center !important; flex-direction: column !important;">
 
         <div class="poleasingowe_section">
@@ -47,7 +49,7 @@ export const pcTemplate = (
                         64bit w
                         polskiej wersji językowej, wraz z najnowszymi sterownikami oraz dodatkową przeglądarką
                         Internetową. po rozpakowaniu z pudełka jest gotowy do pracy<br></p>
-                    <div class="poleasingowe_text_container" style="display: ${infoActive}">
+                    <div class="poleasingowe_text_container" data-omit="${infoActive}">
                         <p class="poleasingowe_p" style="color: #313131 !important;">uwagi:</p>
                         <ul class="poleasingowe_ul" >
                             <li><b class="poleasingowe_b">${additionalInfo}</b></li>
@@ -145,14 +147,6 @@ export const pcTemplate = (
             font-family: "Poppins", serif;
             font-style: normal;
         }
-
-        .system_Brak , .disk_Brak{
-        display: none
-        }
-
-            .poleasingoweCaseType_Tower, .poleasingoweCaseType_Mid, .poleasingoweCaseType_SFF, .poleasingoweCaseType_USDT, .poleasingoweCaseType_Tiny, .poleasingoweCaseType_Micro, .poleasingoweCaseType_USFF, .poleasingoweCaseType_Mini, .poleasingoweCaseType_Mini_Tower {
-            display: none !important
-            }
 
         .poleasingowe_h3 {
             color: #313131;
@@ -277,6 +271,4 @@ export const pcTemplate = (
             }
         }
     </style>
-`
-
-
+`)

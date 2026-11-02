@@ -19,8 +19,13 @@ import { LaptopTemplateNew } from "./templates/laptopTemplateNew";
 import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
 import { Product, SearchResult, FormData, Attribute, ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { AddImageApilo } from "../backendQueries/addImageApilo";
+import { ApiloSubmitControls } from "./apiloSubmitControls";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
+import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import AllegroParameters from "./allegroComponents/AllegroLaptopParameters";
+import { resolveImportedShoperAttribute } from "./allegroComponents/importShoperAttribute";
+import { ShoperImportedFieldStyles, shoperFieldWasProvided, shoperImportedAttributeNames, useShoperImportedFields } from "./shoperImportedFields";
 import { laptopParametersAllegro } from "../allegroParameters/laptopParameters";
 
 import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
@@ -121,6 +126,7 @@ function AddLaptopNew(props: AddProductProps) {
     const [additinalcaseInfoSK, setAdditinalcaseInfoSK] = useState("");
     // Obsługa zdjęć produktu
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
+    const [addToApilo, setAddToApilo] = useState(true);
     const imageInputRef = useRef<HTMLInputElement | null>(null);
     const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -131,6 +137,7 @@ function AddLaptopNew(props: AddProductProps) {
     const [loadingShoperOffer, setLoadingShoperOffer] = useState(false);
     const [shoperOfferId, setShoperOfferId] = useState("");
     const [pendingShoperAttributes, setPendingShoperAttributes] = useState<Array<[number, unknown]> | null>(null);
+    const { importedFields, clearImportedFields, markImportedFields, onImportedFieldChange } = useShoperImportedFields();
     const [updatingProduct, setUpdatingProduct] = useState(false);
     const [relatedPackId, setRelatedPackId] = useState("");
     // Szablon opisu Allegro (sekcje tekstowe/obrazkowe)
@@ -611,94 +618,20 @@ function AddLaptopNew(props: AddProductProps) {
         setValue(`attribute_${id}`, coerceToString(normalizedValue));
     };
 
-    const setImportAttributeValue = (id: number, value: unknown) => {
+    const setImportAttributeValue = (id: number, value: unknown): boolean => {
         const attr = attributeList.find((item) => item.attribute_id === id);
-        if ([826, 827, 828].includes(id)) {
-            setValue(`attribute_${id}`, normalizeCountValue(value));
-            return;
-        }
-        if (!attr) {
-            if (value != null && String(value).trim() !== "") {
-                setValue(`attribute_${id}`, value as any);
-            }
-            return;
-        }
-        if (isCountAttribute(attr.name)) {
-            setValue(`attribute_${id}`, normalizeCountValue(value));
-            return;
-        }
-        const normalizeOption = (input: string) =>
-            input
-                .toLowerCase()
-                .replace(/\s+/g, "")
-                .replace(/,/g, ".")
-                .replace(/[^a-z0-9.]/g, "");
-        const toNumber = (input: string) => {
-            const normalized = normalizeOption(input);
-            const numeric = normalized.replace(/[^0-9.]/g, "");
-            if (!numeric) return null;
-            const parsed = Number(numeric);
-            return Number.isFinite(parsed) ? parsed : null;
-        };
-        const findSelectOptionValue = (candidate: unknown) => {
-            const options = attr.options ?? [];
-            if (!options.length) return undefined;
-            const candidateString = coerceToString(candidate);
-            if (!candidateString) return undefined;
-            const direct = options.find((opt) => String(opt.value ?? "") === candidateString);
-            if (direct) return direct.value ?? "";
-            const byId = options.find((opt) => String(opt.option_id) === candidateString);
-            if (byId) return byId.value ?? "";
-            const normalizedCandidate = normalizeOption(candidateString);
-            const normalizedMatch = options.find(
-                (opt) => normalizeOption(String(opt.value ?? "")) === normalizedCandidate
-            );
-            if (normalizedMatch) return normalizedMatch.value ?? "";
-            const candidateNumber = toNumber(candidateString);
-            if (candidateNumber != null) {
-                const numberMatch = options.find((opt) => {
-                    const optionNumber = toNumber(String(opt.value ?? ""));
-                    return optionNumber != null && optionNumber === candidateNumber;
-                });
-                if (numberMatch) return numberMatch.value ?? "";
-            }
-            const containsMatch = options.find((opt) => {
-                const normalizedOption = normalizeOption(String(opt.value ?? ""));
-                return (
-                    normalizedOption.includes(normalizedCandidate) ||
-                    normalizedCandidate.includes(normalizedOption)
-                );
-            });
-            if (containsMatch) return containsMatch.value ?? "";
-            return undefined;
-        };
-        if (String(attr.type) === "1") {
-            if (isCountAttribute(attr.name)) {
-                setValue(`attribute_${id}`, normalizeCountValue(value));
-                return;
-            }
-            setValue(`attribute_${id}`, coerceToBoolean(value));
-            return;
-        }
-        if (String(attr.type) === "2" || (attr.options ?? []).length > 0) {
-            const resolved = resolveSelectValue(attr, value);
-            const matched =
-                findSelectOptionValue(resolved) ?? findSelectOptionValue(value);
-            if (matched != null) {
-                setValue(`attribute_${id}`, matched);
-                return;
-            }
-            const optionValues = new Set((attr.options ?? []).map((opt) => String(opt.value ?? "")));
-            const currentValue = getValues(`attribute_${id}`);
-            if (!optionValues.has(String(currentValue ?? ""))) {
+        if (!attr) return false;
+        const normalized = isCountAttribute(attr.name) ? normalizeCountValue(value) : value;
+        const matched = resolveImportedShoperAttribute(attr, normalized);
+        if (matched === undefined) {
+            if ((String(attr.type) === "2" || attr.options?.length) &&
+                resolveImportedShoperAttribute(attr, getValues(`attribute_${id}`)) === undefined) {
                 setValue(`attribute_${id}`, "");
             }
-            return;
+            return false;
         }
-        const textValue = coerceToString(value);
-        if (textValue) {
-            setValue(`attribute_${id}`, textValue);
-        }
+        setValue(`attribute_${id}`, matched as any, { shouldDirty: true, shouldValidate: true });
+        return true;
     };
 
     useEffect(() => {
@@ -739,9 +672,6 @@ function AddLaptopNew(props: AddProductProps) {
 
     const resolveShoperOptionValue = (attribute: Attribute | undefined, value: unknown) => {
         const raw = coerceToString(value);
-        if (raw === MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2) {
-            return MATRIX_GRADE_GHOSTS_AND_SCUFFS;
-        }
         if (!raw.startsWith(SHOPER_OPTION_PREFIX)) return raw;
         const optionId = raw.slice(SHOPER_OPTION_PREFIX.length);
         const option =
@@ -750,6 +680,17 @@ function AddLaptopNew(props: AddProductProps) {
                 .flatMap((candidateAttribute) => candidateAttribute.options ?? [])
                 .find((candidate) => String(candidate.option_id) === optionId);
         return String(option?.value ?? "");
+    };
+
+    const resolveShoperPayloadValue = (attribute: Attribute | undefined, value: unknown) => {
+        const resolved = resolveShoperOptionValue(attribute, value);
+        if (
+            String(attribute?.attribute_id) === "315" &&
+            resolved === MATRIX_GRADE_GHOSTS_AND_SCUFFS_CAT_2
+        ) {
+            return MATRIX_GRADE_GHOSTS_AND_SCUFFS;
+        }
+        return resolved;
     };
 
     const getVisualConditionDisplayValue = (value: unknown) => {
@@ -993,15 +934,20 @@ function AddLaptopNew(props: AddProductProps) {
 
     // Import parametrów wybranego produktu Allegro do formularza Shoper
     const handleImportAllegroFormToShoper = () => {
+        clearImportedFields();
         if (attributeList.length === 0) {
             toast.error("Lista atrybutów nie została jeszcze pobrana.");
             return;
         }
         const getAttrIdByNames = (names: string[]) =>
             names.map((name) => getAttributeIdByName(name)).find((id) => id != null);
+        const skipped: string[] = [];
+        let imported = 0;
         const setByNames = (names: string[], value: unknown) => {
+            if (value == null || value === "" || (Array.isArray(value) && !value.length)) return;
             const id = getAttrIdByNames(names);
-            if (id != null) setImportAttributeValue(id, value);
+            if (id != null && setImportAttributeValue(id, value)) imported += 1;
+            else skipped.push(names[0]);
         };
 
         setByNames(["Stan"], formData["Stan"]);
@@ -1064,7 +1010,9 @@ function AddLaptopNew(props: AddProductProps) {
         const setFlagByNames = (names: string[], value: boolean | number) => {
             const id = getAttrIdByNames(names);
             if (id != null) {
-                setValue(`attribute_${id}`, value as any);
+                const attribute = attributeList.find(item => item.attribute_id === id);
+                const matched = attribute && resolveImportedShoperAttribute(attribute, value);
+                if (matched !== undefined) setValue(`attribute_${id}`, matched as any);
             }
         };
 
@@ -1085,6 +1033,8 @@ function AddLaptopNew(props: AddProductProps) {
         setFlagByNames(["modem 4G"], hasModem4g ? true : false);
         setFlagByNames(["Thunderbolt"], hasThunderbolt ? true : false);
         setFlagByNames(["Bluetooth"], hasBluetooth ? true : false);
+        if (skipped.length) toast.warning(`Pominięto ${skipped.length} pól bez odpowiednika w Shoperze: ${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? "..." : ""}.`);
+        if (imported) toast.success(`Zaimportowano ${imported} pól do Shopera.`);
     };
 
     const handleFetchShoperOffer = async () => {
@@ -1095,6 +1045,7 @@ function AddLaptopNew(props: AddProductProps) {
         }
 
         setLoadingShoperOffer(true);
+        clearImportedFields();
         try {
             const response = await axios.get(`${API_URL}/product/${offerId}`, {
                 headers: {
@@ -1215,6 +1166,22 @@ function AddLaptopNew(props: AddProductProps) {
                 applyAttributeEntriesToForm(attributeEntries, attributeMap);
             }
 
+            const imported = shoperImportedAttributeNames(attributeEntries);
+            if (shoperFieldWasProvided(pl.name)) imported.push("name");
+            if (shoperFieldWasProvided(pl.description)) imported.push("description");
+            if (shoperFieldWasProvided(pl.active) || shoperFieldWasProvided(product?.active)) imported.push("active");
+            if (shoperFieldWasProvided(cs.description)) imported.push("descriptionCZ");
+            if (shoperFieldWasProvided(sk.description)) imported.push("descriptionSK");
+            if (shoperFieldWasProvided(product?.code)) imported.push("SKU");
+            if (product?.producer_id) imported.push("producer");
+            if (shoperFieldWasProvided(product?.stock?.price)) imported.push("price");
+            if (shoperFieldWasProvided(product?.stock?.stock)) imported.push("stock");
+            if (Number.isFinite(primaryCategoryId) && primaryCategoryId > 0) imported.push("categoryId");
+            if (Array.isArray(product?.categories) && product.categories.length) imported.push("AdditionalCategories");
+            if (typeof safetyProducerId === "number") imported.push("productSafetyProducerId");
+            if (normalizedCerts.length) imported.push("productSafetyCertificateIds");
+            markImportedFields(imported);
+
             toast.success("Dane aukcji z Shopera zostały pobrane.");
         } catch (error) {
             if (axios.isAxiosError(error)) {
@@ -1265,7 +1232,11 @@ function AddLaptopNew(props: AddProductProps) {
         }
         try {
             const response = await axios.get(`${API_URL}/product/responsibleProducers`, {
-                headers: { Authorization: `Bearer ${props.accessTokenAllegro}` },
+                params: { allegroAccountId: props.allegroAccountId },
+                headers: {
+                    Authorization: `Bearer ${props.authToken}`,
+                    "Cache-Control": "no-cache",
+                },
             });
             setResponsibleData(response.data);
         } catch (error) {
@@ -1396,16 +1367,8 @@ function AddLaptopNew(props: AddProductProps) {
         } catch (error: any) {
             if (axios.isAxiosError(error)) {
                 const apiError = error.response?.data;
-                const allegroError = apiError?.errors?.[0];
-                const userMessage = allegroError?.userMessage || allegroError?.message || error.message;
-                const metadata = allegroError?.metadata;
-                let fullMessage = userMessage;
-                if (metadata) {
-                    fullMessage += `\nSzczegóły: ${JSON.stringify(metadata, null, 2)}`;
-                }
-                fullMessage += `\nPełny błąd: ${JSON.stringify(apiError, null, 2)}`;
                 console.error("Błąd Allegro:", apiError);
-                toast.error(fullMessage);
+                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
             } else {
                 console.error("Błąd aplikacji:", error);
                 toast.error("Wystąpił nieznany błąd podczas dodawania na Allegro.");
@@ -1578,8 +1541,10 @@ function AddLaptopNew(props: AddProductProps) {
         };
         fetchInitialData();
         handleGetCategories();
+        setResponsibleProducerId("");
+        setResponsibleData(undefined);
         handleGetResponsiblePrducers();
-    }, [props.authToken, props.accessTokenAllegro]);
+    }, [props.authToken, props.accessTokenAllegro, props.allegroAccountId]);
 
     // Obsługa uploadu obrazów – aktualizacja linków i wskaźnika ładowania
     useEffect(() => {
@@ -1613,6 +1578,7 @@ function AddLaptopNew(props: AddProductProps) {
 
     // Reset formularza (Shoper + Allegro)
     const handleReset = () => {
+        clearImportedFields();
         reset();               // reset pól formularza Shoper
         setFormData({});       // wyczyszczenie danych Allegro
         setSelectedProductId(null);
@@ -1629,16 +1595,17 @@ function AddLaptopNew(props: AddProductProps) {
             const fieldValue = (data as any)[`attribute_${attribute.attribute_id}`];
             if (fieldValue == null || fieldValue === "") return;
             if (typeof fieldValue === "string") {
-                attributesPayload[attribute.attribute_id] = resolveShoperOptionValue(attribute, fieldValue);
+                attributesPayload[attribute.attribute_id] = resolveShoperPayloadValue(attribute, fieldValue);
             } else if (Array.isArray(fieldValue)) {
                 const filtered = fieldValue
-                    .map((value) => resolveShoperOptionValue(attribute, value))
+                    .map((value) => resolveShoperPayloadValue(attribute, value))
                     .filter((s: string) => s.trim() !== "");
                 if (filtered.length) {
                     attributesPayload[attribute.attribute_id] = filtered.join(JOINER);
                 }
             } else if (typeof fieldValue === "number" || typeof fieldValue === "boolean") {
-                attributesPayload[attribute.attribute_id] = String(fieldValue);
+                attributesPayload[attribute.attribute_id] = String(attribute.type) === "1" && typeof fieldValue === "boolean"
+                    ? (fieldValue ? "1" : "0") : String(fieldValue);
             }
         });
         return attributesPayload;
@@ -1647,7 +1614,10 @@ function AddLaptopNew(props: AddProductProps) {
     const buildLegacyLocalizedAttributesPayload = (data: IFormInput, basePayload: Record<number, string>) => {
         const merged: Record<number, string> = { ...basePayload };
         const getValueById = (id: number) =>
-            resolveShoperOptionValue(attributeList.find((attribute) => attribute.attribute_id === id), (data as any)[`attribute_${id}`]);
+            resolveShoperPayloadValue(
+                attributeList.find((attribute) => String(attribute.attribute_id) === String(id)),
+                (data as any)[`attribute_${id}`]
+            );
         const getTranslated = (id: number, locale: "cz" | "sk") => {
             const raw = getValueById(id);
             if (!raw) return "";
@@ -1897,7 +1867,6 @@ function AddLaptopNew(props: AddProductProps) {
                     }, {
                         headers: { Authorization: `Bearer ${props.authToken}` }
                     });
-                    toast.success(`Dodano zdjęcie ${i + 1}`);
                 } catch (err) {
                     console.error("Błąd dodawania zdjęcia:", err);
                     toast.error("Błąd podczas dodawania zdjęcia");
@@ -1905,8 +1874,9 @@ function AddLaptopNew(props: AddProductProps) {
             }
 
             // Dodanie produktu do Apilo
-            apiloImageUUIDs = await AddImageApilo(props, selectedImages);
-            await axios.post(`${API_URL}/product/apilo`, [
+            if (addToApilo) {
+                apiloImageUUIDs = await AddImageApilo(props, selectedImages);
+                await axios.post(`${API_URL}/product/apilo`, [
                 {
                     sku: data.SKU,
                     name: data.name,
@@ -1919,7 +1889,8 @@ function AddLaptopNew(props: AddProductProps) {
                 }
             ], {
                 headers: { Authorization: `Bearer ${props.authToken}` }
-            });
+                });
+            }
 
             // (Opcjonalnie) usunięcie z Apilo poprzedniego produktu o tym SKU, jeśli istniał
             // const apiloListRes = await axios.get(`${API_URL}/product/apiloProductslist`, {
@@ -1935,7 +1906,7 @@ function AddLaptopNew(props: AddProductProps) {
             toast.success(`Produkt ${newProductId} został pomyślnie dodany.`);
         } catch (error: any) {
             console.error("Błąd dodawania produktu:", error.response?.data || error);
-            toast.error("Wystąpił błąd podczas dodawania produktu.");
+            toast.error(getShoperErrorMessage(error, attributeList));
         }
     };
 
@@ -2035,7 +2006,7 @@ function AddLaptopNew(props: AddProductProps) {
 
         } catch (error: any) {
             console.error("Błąd aktualizacji produktu:", error.response?.data || error);
-            toast.error("Wystąpił błąd podczas aktualizacji produktu.");
+            toast.error(getApiErrorMessage(error, "Nie udało się zaktualizować produktu.", attributeList));
         } finally {
             setUpdatingProduct(false);
         }
@@ -2849,13 +2820,15 @@ function AddLaptopNew(props: AddProductProps) {
                                 "Dodaj produkt do Allegro"
                             )}
                         </Button>
+                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                         <Button
                             variant="contained"
                             color="success"
                             onClick={handleSubmit(onSubmit)}
                         >
-                            Dodaj (Shoper + apilo)
+                            {addToApilo ? "Dodaj (Shoper + Apilo)" : "Dodaj do Shopera"}
                         </Button>
+                        </ApiloSubmitControls>
                         <Button
                             variant="contained"
                             color="warning"
@@ -2874,7 +2847,8 @@ function AddLaptopNew(props: AddProductProps) {
                     </Box>
                 </Box>
                 {/* Formularz dodawania produktu */}
-                <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <ShoperImportedFieldStyles fields={importedFields} />
                     <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                     <Box sx={{ py: 2, display: 'grid', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                         <ThemeProvider theme={MainTheme}>
@@ -2943,7 +2917,7 @@ function AddLaptopNew(props: AddProductProps) {
                             <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
                             <TextField required label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
                             <TextField required label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
-                            <TextField required label="Cena" type="number" InputLabelProps={{ shrink: true }} {...register("price")} />
+                            <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
                             <TextField
                                 required
                                 label="Tytuł"
@@ -2991,7 +2965,7 @@ function AddLaptopNew(props: AddProductProps) {
                                                 </li>
                                             )}
                                             renderInput={(params) => (
-                                                <TextField {...params} label="Kategoria" />
+                                                <TextField {...params} name="categoryId" label="Kategoria" />
                                             )}
                                         />
                                     );
@@ -3019,7 +2993,7 @@ function AddLaptopNew(props: AddProductProps) {
                                             renderOption={(props, option) => (
                                                 <li {...props} key={option.category_id}>{getCategoryName(option)}</li>
                                             )}
-                                            renderInput={(params) => <TextField {...params} label="Dodatkowe kategorie" />}
+                                            renderInput={(params) => <TextField {...params} name="AdditionalCategories" label="Dodatkowe kategorie" />}
                                         />
                                     );
                                 }}
@@ -3040,7 +3014,7 @@ function AddLaptopNew(props: AddProductProps) {
                                         renderOption={(props, option) => (
                                             <li {...props} key={option.producer_id}>{option.name}</li>
                                         )}
-                                        renderInput={(params) => <TextField {...params} label="Producent" />}
+                                        renderInput={(params) => <TextField {...params} name="producer" label="Producent" />}
                                     />
                                 )}
                             />
@@ -3055,6 +3029,7 @@ function AddLaptopNew(props: AddProductProps) {
                                     defaultValue={0}
                                     render={({ field }) => (
                                         <Select
+                                            name={field.name}
                                             labelId="product-safety-producer-label"
                                             label="Product Safety Producer"
                                             value={field.value ?? 0}
@@ -3090,6 +3065,7 @@ function AddLaptopNew(props: AddProductProps) {
                                     defaultValue={[]}
                                     render={({ field }) => (
                                         <Select
+                                            name={field.name}
                                             multiple
                                             labelId="product-safety-certificates-label"
                                             label="Product Safety Certificates"
@@ -3273,6 +3249,7 @@ function AddLaptopNew(props: AddProductProps) {
                             <TextField
                                 label="Cena Allegro"
                                 type="number"
+                                inputProps={{ step: "0.01" }}
                                 fullWidth
                                 InputLabelProps={{ shrink: true }}
                                 {...register("allegroPrice", { valueAsNumber: true })}

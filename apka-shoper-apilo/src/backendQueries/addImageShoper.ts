@@ -1,6 +1,5 @@
 import axios from "axios";
 import { API_URL } from "../config";
-import { toast } from "react-toastify";
 type AddProductProps = {
     authToken: string
 }
@@ -26,11 +25,9 @@ export const AddImageShoper = async (response: any, selectedImages: File[], imag
                         Authorization: `Bearer ${props.authToken}`
                     }
                 });
-                toast.success("Zdjęcie produktu poprawnie dodane");
                 void responseImg.data;
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Wystąpił błąd podczas dodawania zdjęcia");
                 throw error;
             }
         }
@@ -38,11 +35,10 @@ export const AddImageShoper = async (response: any, selectedImages: File[], imag
     catch (error) {
         if (axios.isAxiosError(error)) {
             console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-            toast.error("Wystąpił błąd dodawania zdjecia do shopera");
         } else {
             console.error("Błąd aplikacji:", error);
-            toast.error("Wystąpił błąd dodawania zdjecia do shopera");
         }
+        throw error;
     };
 
 };

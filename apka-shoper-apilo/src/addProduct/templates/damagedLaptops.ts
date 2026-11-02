@@ -1,3 +1,5 @@
+import { renderConditionalDescription } from "../templates/renderConditionalDescription";
+
 export const damagedLaptopTemplate = (
     model: string,
     marka: string,
@@ -10,7 +12,7 @@ export const damagedLaptopTemplate = (
     gpu: string,
     screen: string,
     battery: string,
-) => `
+) => renderConditionalDescription(`
     <div id="mainContainer" style="display: flex; align-items: center; flex-direction: column;">
 
         <div class="damagedLaptops_section">
@@ -25,9 +27,9 @@ export const damagedLaptopTemplate = (
                         stan
                         jak na zdjęciach, ${visualConditionDescription} <br><br>
 
-                        ❗<b style="display: ${biosOK}">Laptop został przetestowany tylko i wyłącznie wejściem do biosu. Laptop wchodzi do
+                        ❗<b data-omit="${biosOK}">Laptop został przetestowany tylko i wyłącznie wejściem do biosu. Laptop wchodzi do
                             BIOS-u❗, </b>
-                            <b style="display: ${biosX}">Laptop nie uruchamia się, </b>
+                            <b data-omit="${biosX}">Laptop nie uruchamia się, </b>
                             nie posiada zainstalowanego systemu.
 
                         <br>
@@ -87,4 +89,4 @@ export const damagedLaptopTemplate = (
 
         }
     </style>
-`
+`)

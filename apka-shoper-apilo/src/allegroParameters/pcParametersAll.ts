@@ -11985,6 +11985,11 @@ export const pcParametersAll = [
                 "dependsOnValueIds": []
             },
             {
+                "id": "4477_2048052",
+                "value": "SFF",
+                "dependsOnValueIds": []
+            },
+            {
                 "id": "4477_209781",
                 "value": "Tower",
                 "dependsOnValueIds": []
@@ -11996,7 +12001,7 @@ export const pcParametersAll = [
             },
             {
                 "id": "4477_80",
-                "value": "Inna",
+                "value": "inny",
                 "dependsOnValueIds": []
             }
         ],

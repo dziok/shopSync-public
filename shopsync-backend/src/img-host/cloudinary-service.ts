@@ -20,4 +20,15 @@ export class CloudinaryService {
       }).end(file.buffer);
     });
   }
+
+  async uploadRawFeed(path: string): Promise<string> {
+    const publicId = 'shopsync-chatgpt-ads-feed.csv.gz';
+    const result = await cloudinary.uploader.upload(path, {
+      resource_type: 'raw', public_id: publicId, overwrite: true, invalidate: true,
+    });
+    if (result.resource_type !== 'raw' || result.public_id !== publicId || !result.secure_url) {
+      throw new Error('Cloudinary did not return the expected raw feed asset.');
+    }
+    return cloudinary.url(publicId, { resource_type: 'raw', secure: true });
+  }
 }

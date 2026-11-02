@@ -8,6 +8,10 @@ export const cpuTypesDescriptions = {
     'AMD Ryzen 7': "Ryzen 7 to wysokowydajne procesory do wymagających zadań, takich jak obróbka wideo, projektowanie graficzne i granie na wysokich ustawieniach. Dzięki dużej liczbie rdzeni i wątków pozwalają na płynną pracę nawet w najbardziej wymagających aplikacjach. Technologia Precision Boost dynamicznie podnosi taktowanie, dostosowując moc do aktualnego obciążenia. Ryzen 7 to doskonały wybór dla profesjonalistów i entuzjastów technologii.",
     'AMD Ryzen 9': "AMD Ryzen 9 to procesory dla najbardziej wymagających użytkowników, którzy oczekują najwyższej wydajności. Świetnie sprawdzają się w profesjonalnych zastosowaniach, takich jak renderowanie 3D, programowanie i granie w rozdzielczości 4K. Posiadają zaawansowane technologie optymalizujące wydajność i zużycie energii. Ryzen 9 to wybór dla tych, którzy potrzebują bezkompromisowej mocy obliczeniowej.",
     'AMD Ryzen Threadripper': "Potężne procesory stworzone dla profesjonalistów zajmujących się edycją wideo, renderowaniem 3D i pracą w wymagających środowiskach. Ogromna liczba rdzeni i wątków sprawia, że Threadripper z łatwością obsługuje nawet najbardziej złożone operacje. Wysoka przepustowość pamięci i zaawansowane technologie gwarantują stabilną i wydajną pracę. To rozwiązanie dla osób, które potrzebują maksymalnej mocy do profesjonalnych zastosowań.",
+    'AMD A4': "Procesory AMD A4 z rodziny APU łączą procesor i zintegrowaną grafikę. Są przeznaczone do podstawowych zadań, takich jak praca z dokumentami, pocztą i przeglądarką. Wydajność zależy od konkretnego modelu oraz konfiguracji komputera.",
+    'AMD A8': "Procesory AMD A8 z rodziny APU łączą procesor i zintegrowaną grafikę. Sprawdzają się w codziennej pracy biurowej, przeglądaniu internetu i odtwarzaniu multimediów. Możliwości komputera zależą od konkretnego modelu i pozostałych podzespołów.",
+    'AMD A10': "Procesory AMD A10 z rodziny APU oferują zintegrowaną grafikę do codziennych zastosowań. Nadają się do pracy z dokumentami, korzystania z przeglądarki i multimediów. Rzeczywista wydajność zależy od modelu oraz konfiguracji komputera.",
+    'AMD A12': "Procesory AMD A12 z rodziny APU łączą funkcje procesora i układu graficznego. Są odpowiednie do zadań biurowych, przeglądania internetu i multimediów. Zakres możliwości zależy od konkretnego modelu i konfiguracji komputera.",
     'Intel Core 2 Quad': "Starsza, ale wciąż używana seria procesorów czterordzeniowych, które dobrze sprawdzają się w podstawowych zadaniach. Nadają się do przeglądania internetu, oglądania filmów i prostych prac biurowych. Choć nie obsługują najnowszych technologii, wciąż mogą działać w starszych komputerach. To solidny wybór dla osób modernizujących starszy sprzęt.",
     'Intel Core 2 Duo': "Dwurdzeniowe procesory, które dobrze sprawdzają się w podstawowych zastosowaniach, takich jak praca biurowa i przeglądanie internetu. Są energooszczędne i sprawdzają się w starszych komputerach, które nie wymagają dużej mocy obliczeniowej. Mimo ograniczeń technologicznych mogą wciąż spełniać wymagania użytkowników o niewielkich potrzebach. Dobry wybór do modernizacji starszych systemów.",
     'Intel Pentium': "Procesory Intel Pentium to ekonomiczne rozwiązanie do codziennych zastosowań. Oferują wystarczającą moc do podstawowych zadań, takich jak przeglądanie stron internetowych, oglądanie filmów i praca biurowa. Charakteryzują się niskim poborem mocy i stabilnością działania. To dobra opcja dla osób szukających taniego, ale niezawodnego procesora.",
@@ -26,6 +30,10 @@ export const cpuTypesDescriptionsCZ = {
     'AMD Ryzen 7': "Ryzen 7 jsou vysoce výkonné procesory pro náročné úkoly, jako je úprava videí, grafický design nebo hraní her na vysoké nastavení. Díky vysokému počtu jader a vláken umožňují plynulý chod i náročných aplikací. Technologie Precision Boost dynamicky zvyšuje takt podle zátěže. Ryzen 7 je ideální pro profesionály a technologické nadšence.",
     'AMD Ryzen 9': "AMD Ryzen 9 jsou procesory pro nejnáročnější uživatele, kteří vyžadují maximální výkon. Skvěle se hodí pro profesionální úkoly, jako je 3D rendering, programování nebo hraní ve 4K rozlišení. Mají pokročilé technologie pro optimalizaci výkonu a spotřeby. Ryzen 9 je volba pro ty, kteří chtějí bezkompromisní výpočetní sílu.",
     'AMD Ryzen Threadripper': "Výkonné procesory navržené pro profesionály v oblasti úpravy videí, 3D renderingu a práce v náročných prostředích. Díky obrovskému počtu jader a vláken zvládnou i ty nejsložitější operace. Vysoká propustnost paměti a pokročilé technologie zajišťují stabilní a efektivní práci. Řešení pro ty, kteří potřebují maximální výkon pro profesionální použití.",
+    'AMD A4': "Procesory AMD A4 z řady APU spojují procesor a integrovanou grafiku. Jsou určené pro základní úkoly, jako je práce s dokumenty, e-mailem a prohlížečem. Výkon závisí na konkrétním modelu a konfiguraci počítače.",
+    'AMD A8': "Procesory AMD A8 z řady APU spojují procesor a integrovanou grafiku. Hodí se pro běžnou kancelářskou práci, prohlížení internetu a přehrávání multimédií. Možnosti počítače závisí na konkrétním modelu a ostatních součástkách.",
+    'AMD A10': "Procesory AMD A10 z řady APU nabízejí integrovanou grafiku pro každodenní použití. Hodí se pro práci s dokumenty, používání prohlížeče a multimédia. Skutečný výkon závisí na modelu a konfiguraci počítače.",
+    'AMD A12': "Procesory AMD A12 z řady APU spojují funkce procesoru a grafického čipu. Jsou vhodné pro kancelářské úkoly, prohlížení internetu a multimédia. Jejich možnosti závisí na konkrétním modelu a konfiguraci počítače.",
     'Intel Core 2 Quad': "Starší, ale stále používaná řada čtyřjádrových procesorů, které dobře zvládají základní úkoly. Hodí se pro prohlížení internetu, sledování filmů a jednoduchou kancelářskou práci. Ačkoli nepodporují nejnovější technologie, stále mohou fungovat ve starších počítačích. Spolehlivá volba pro modernizaci staršího zařízení.",
     'Intel Core 2 Duo': "Dvoujádrové procesory, které dobře zvládají základní úkoly, jako je kancelářská práce a prohlížení internetu. Jsou energeticky úsporné a vhodné pro starší počítače, které nevyžadují vysoký výkon. Přes technologická omezení mohou stále splňovat požadavky méně náročných uživatelů. Dobrá volba pro obnovu starších systémů.",
     'Intel Pentium': "Procesory Intel Pentium jsou cenově dostupné řešení pro každodenní použití. Nabízejí dostatečný výkon pro základní úkoly, jako je prohlížení webu, sledování videí a kancelářská práce. Vyznačují se nízkou spotřebou energie a stabilním výkonem. Dobrá volba pro ty, kdo hledají levný a spolehlivý procesor.",
@@ -44,6 +52,10 @@ export const cpuTypesDescriptionsSK = {
     'AMD Ryzen 7': "Ryzen 7 sú vysoko výkonné procesory určené na náročné úlohy ako úprava videa, grafický dizajn a hranie hier na vysokých nastaveniach. Vďaka veľkému počtu jadier a vlákien zvládnu aj najnáročnejšie aplikácie. Technológia Precision Boost dynamicky zvyšuje frekvenciu podľa zaťaženia. Ryzen 7 je skvelou voľbou pre profesionálov a technologických nadšencov.",
     'AMD Ryzen 9': "AMD Ryzen 9 sú procesory pre najnáročnejších používateľov, ktorí očakávajú najvyšší výkon. Sú ideálne pre profesionálne využitie, ako je 3D rendering, programovanie alebo hranie hier v 4K rozlíšení. Obsahujú pokročilé technológie optimalizujúce výkon a spotrebu energie. Ryzen 9 je voľba pre tých, ktorí potrebujú nekompromisný výpočtový výkon.",
     'AMD Ryzen Threadripper': "Výkonné procesory navrhnuté pre profesionálov pracujúcich s úpravou videa, 3D renderingom a v náročných pracovných prostrediach. Obrovský počet jadier a vlákien umožňuje zvládnuť aj tie najkomplexnejšie operácie. Vysoká priepustnosť pamäte a pokročilé technológie zabezpečujú stabilný a efektívny výkon. Riešenie pre tých, ktorí potrebujú maximálnu silu pre profesionálne použitie.",
+    'AMD A4': "Procesory AMD A4 z rodiny APU spájajú procesor a integrovanú grafiku. Sú určené na základné úlohy, ako je práca s dokumentmi, e-mailom a prehliadačom. Výkon závisí od konkrétneho modelu a konfigurácie počítača.",
+    'AMD A8': "Procesory AMD A8 z rodiny APU spájajú procesor a integrovanú grafiku. Hodia sa na bežnú kancelársku prácu, prehliadanie internetu a prehrávanie multimédií. Možnosti počítača závisia od konkrétneho modelu a ostatných komponentov.",
+    'AMD A10': "Procesory AMD A10 z rodiny APU ponúkajú integrovanú grafiku na každodenné použitie. Hodia sa na prácu s dokumentmi, používanie prehliadača a multimédiá. Skutočný výkon závisí od modelu a konfigurácie počítača.",
+    'AMD A12': "Procesory AMD A12 z rodiny APU spájajú funkcie procesora a grafického čipu. Sú vhodné na kancelárske úlohy, prehliadanie internetu a multimédiá. Ich možnosti závisia od konkrétneho modelu a konfigurácie počítača.",
     'Intel Core 2 Quad': "Staršia, ale stále používaná séria štvorjadrových procesorov, ktoré zvládajú základné úlohy. Sú vhodné na prehliadanie internetu, sledovanie videí a jednoduchú kancelársku prácu. Aj keď nepodporujú najnovšie technológie, môžu ešte fungovať v starších počítačoch. Spoľahlivá voľba pre modernizáciu starších zariadení.",
     'Intel Core 2 Duo': "Dvojjadrové procesory, ktoré sú vhodné na základné použitie, ako je kancelárska práca a prehliadanie internetu. Sú energeticky úsporné a vhodné pre staršie počítače, ktoré nepotrebujú vysoký výkon. Napriek technologickým obmedzeniam môžu stále vyhovovať menej náročným používateľom. Dobrá voľba na modernizáciu starších systémov.",
     'Intel Pentium': "Procesory Intel Pentium sú ekonomickým riešením na každodenné použitie. Poskytujú dostatočný výkon na základné úlohy, ako je prehliadanie webu, sledovanie videí a kancelárska práca. Vyznačujú sa nízkou spotrebou energie a stabilným výkonom. Dobrá voľba pre tých, ktorí hľadajú lacný a spoľahlivý procesor.",
@@ -54,6 +66,33 @@ export const cpuTypesDescriptionsSK = {
 }
 
 
+
+const genericAmdDescriptions = {
+    pl: "Procesor AMD nadaje się do codziennych zadań, takich jak praca z dokumentami, pocztą i przeglądarką. Wydajność zależy od konkretnego modelu oraz konfiguracji komputera.",
+    cz: "Procesor AMD se hodí pro každodenní úkoly, jako je práce s dokumenty, e-mailem a prohlížečem. Výkon závisí na konkrétním modelu a konfiguraci počítače.",
+    sk: "Procesor AMD je vhodný na každodenné úlohy, ako je práca s dokumentmi, e-mailom a prehliadačom. Výkon závisí od konkrétneho modelu a konfigurácie počítača.",
+};
+
+export const getCpuTypeDescription = (series: string | undefined, language: "pl" | "cz" | "sk"): string => {
+    const descriptions: Record<string, string> = language === "cz"
+        ? cpuTypesDescriptionsCZ
+        : language === "sk" ? cpuTypesDescriptionsSK : cpuTypesDescriptions;
+    const normalized = String(series ?? "").trim().replace(/\s+/g, " ");
+    if (!normalized) return "";
+
+    const exactKey = Object.keys(descriptions).find((key) => key.toLowerCase() === normalized.toLowerCase());
+    if (exactKey) return descriptions[exactKey];
+
+    const amdSeries = normalized.replace(/^AMD\s+/i, "");
+    const ryzenTier = amdSeries.match(/^Ryzen\s+([3579])\b/i)?.[1];
+    const aSeries = amdSeries.match(/^(A(?:4|8|10|12))(?=$|[\s-])/i)?.[1]?.toUpperCase();
+    const amdKey = ryzenTier ? `AMD Ryzen ${ryzenTier}`
+        : /^Ryzen\s+Threadripper\b/i.test(amdSeries) ? "AMD Ryzen Threadripper"
+            : /^GX\b/i.test(amdSeries) ? "AMD GX" : aSeries ? `AMD ${aSeries}` : "";
+    if (amdKey) return descriptions[amdKey];
+
+    return /^(AMD\b|Ryzen\b|Athlon\b)/i.test(normalized) ? genericAmdDescriptions[language] : "";
+};
 
 export const ramTypesDescriptions = {
     'DDR2': "Pamięć RAM DDR2 to ekonomiczne rozwiązanie dla starszych komputerów, które wciąż sprawdza się w podstawowych zastosowaniach. Charakteryzuje się niższym poborem energii w porównaniu do poprzednich generacji oraz stabilną pracą. Może być używana w komputerach biurowych i domowych, które nie wymagają dużej wydajności. To dobra opcja dla osób modernizujących starszy sprzęt.",
@@ -461,11 +500,52 @@ niekoľko vlastností a špecifikácií tohto systému:
 `
 
 
+type HomeAssistantNotice = { heading: string; paragraphs: string[] };
+
+const homeAssistantNoticePL: HomeAssistantNotice = {
+    heading: "Ważne – wsparcie techniczne i konfiguracja HAOS",
+    paragraphs: [
+        "Przedmiotem sprzedaży jest komputer z zainstalowanym systemem Home Assistant OS (HAOS).",
+        "Produkt przeznaczony jest dla osób posiadających podstawową wiedzę techniczną z zakresu sieci komputerowych i systemów inteligentnego domu.",
+        "Nie świadczymy usług konfiguracji, wdrażania ani wsparcia technicznego w zakresie obsługi systemu Home Assistant. Konfiguracja systemu, integracja urządzeń, instalacja dodatków oraz rozwiązywanie problemów związanych z indywidualnymi ustawieniami leżą po stronie użytkownika.",
+        "Przed zakupem prosimy o uwzględnienie, że samodzielna konfiguracja HAOS wymaga odpowiedniej wiedzy technicznej.",
+    ],
+};
+const homeAssistantNoticeCZ: HomeAssistantNotice = {
+    heading: "Důležité – technická podpora a konfigurace HAOS",
+    paragraphs: [
+        "Předmětem prodeje je počítač s nainstalovaným systémem Home Assistant OS (HAOS).",
+        "Produkt je určen osobám se základními technickými znalostmi počítačových sítí a systémů chytré domácnosti.",
+        "Neposkytujeme služby konfigurace, nasazení ani technickou podporu při používání systému Home Assistant. Konfigurace systému, integrace zařízení, instalace doplňků a řešení problémů souvisejících s individuálním nastavením jsou odpovědností uživatele.",
+        "Před nákupem prosím zvažte, že samostatná konfigurace HAOS vyžaduje odpovídající technické znalosti.",
+    ],
+};
+const homeAssistantNoticeSK: HomeAssistantNotice = {
+    heading: "Dôležité – technická podpora a konfigurácia HAOS",
+    paragraphs: [
+        "Predmetom predaja je počítač s nainštalovaným systémom Home Assistant OS (HAOS).",
+        "Produkt je určený pre osoby so základnými technickými znalosťami počítačových sietí a systémov inteligentnej domácnosti.",
+        "Neposkytujeme služby konfigurácie, zavádzania ani technickú podporu pri používaní systému Home Assistant. Konfigurácia systému, integrácia zariadení, inštalácia doplnkov a riešenie problémov súvisiacich s individuálnymi nastaveniami sú zodpovednosťou používateľa.",
+        "Pred nákupom prosím zohľadnite, že samostatná konfigurácia HAOS vyžaduje primerané technické znalosti.",
+    ],
+};
+
+const renderShoperHomeAssistantNotice = ({ heading, paragraphs }: HomeAssistantNotice) => `
+<div class="haos_notice">
+<h3 class="poleasingowe_h3">${heading}</h3>
+${paragraphs.map((paragraph) => `<p class="poleasingowe_p2">${paragraph}</p>`).join("\n")}
+</div>`;
+
+export const homeAssistantSupportNotice = `
+<h2>${homeAssistantNoticePL.heading}</h2>
+${homeAssistantNoticePL.paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("\n")}`;
+
 const systemDescriptionHomeA = `
 
 <div class="poleasingowe_section">
 <div>
-<img onerror="this.onerror=null; this.src='../homeA.png';" src="userdata/public/skins/shoper_basic_copy_8/assets/homeA.png" alt="cpu" class="windows_logo">
+<img onerror="this.onerror=null; this.src='../homeA.png';" src="/userdata/public/assets/Szablony/pc_poleasingowe/homeA.png" alt="cpu" class="windows_logo">
+
 </div>
 <div>
 <h2 class="poleasingowe_h2">Home Assistant</h2>
@@ -480,6 +560,7 @@ Home Assistant to zaawansowana platforma do automatyki domowej, która umożliwi
 <li>Elastyczność: Obsługuje różne protokoły komunikacyjne, takie jak Zigbee, Z-Wave czy MQTT, zapewniając kompatybilność z wieloma systemami.</li>
 <li>Otwarte oprogramowanie: Home Assistant jest open-source, co oznacza, że społeczność stale rozwija jego funkcje i zapewnia wsparcie.</li>
 </ul>
+${renderShoperHomeAssistantNotice(homeAssistantNoticePL)}
 </div>
 </div>`
 const systemDescriptionHomeACZ = `
@@ -500,6 +581,7 @@ Home Assistant je pokročilá platforma pro domácí automatizaci, která umož�
 <li>Flexibilita: Podporuje různé komunikační protokoly, jako jsou Zigbee, Z-Wave nebo MQTT, čímž zajišťuje kompatibilitu s mnoha systémy.</li>
 <li>Otevřený software: Home Assistant je open-source, což znamená, že jeho funkce neustále rozvíjí komunita a poskytuje podporu.</li>
 </ul>
+${renderShoperHomeAssistantNotice(homeAssistantNoticeCZ)}
 </div>
 </div>`
 const systemDescriptionHomeASK = `
@@ -520,6 +602,7 @@ Home Assistant je pokročilá platforma pre domácu automatizáciu, ktorá umož
 <li>Flexibilita: Podporuje rôzne komunikačné protokoly ako Zigbee, Z-Wave či MQTT, čo zabezpečuje kompatibilitu s mnohými systémami.</li>
 <li>Otvorený softvér: Home Assistant je open-source, čo znamená, že jeho funkcie neustále rozvíja komunita a poskytuje podporu.</li>
 </ul>
+${renderShoperHomeAssistantNotice(homeAssistantNoticeSK)}
 </div>
 </div>`
 
