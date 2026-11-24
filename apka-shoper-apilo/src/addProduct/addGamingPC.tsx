@@ -1,6 +1,9 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { DeliveryContext, useDeliveryAutofill } from "../useDeliveryAutofill";
+import { deliveryFields } from "../bulkFormMapping";
 import axios from "axios";
 import { useForm, SubmitHandler, useWatch, Controller } from "react-hook-form";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useContext } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./addProducts.css";
@@ -87,7 +90,7 @@ function AddGamingPC(props: AddProductProps) {
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
     const submissionInProgress = useRef(false);
-    const { register, handleSubmit, setValue, watch, control, getValues } = useForm<IFormInput>();
+    const { register, handleSubmit, getFieldState, setValue, watch, control, getValues } = useForm<IFormInput>();
     const gameGraphicsAttribute = attributeList.find(
         attribute => attribute.name.trim().toLocaleLowerCase("pl-PL") === "wyłącz grafiki z grami"
     );
@@ -98,6 +101,7 @@ function AddGamingPC(props: AddProductProps) {
     const [addToApilo, setAddToApilo] = useState(true);
     const [editorState, setEditorState] = useState(EditorState.createEmpty());
     const [producers, setProducers] = useState<ProducersResource[]>([]);
+    useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, undefined, producers);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [relatedPackId, setRelatedPackId] = useState("");
@@ -106,7 +110,18 @@ function AddGamingPC(props: AddProductProps) {
     const [nameCZ, setNameCZ] = useState("");
     const [nameSK, setNameSK] = useState("");
     let apiloImageUUIDs: string[] = [];
-    const [formData, setFormData] = useState<FormDataAllegro>({});
+    const delivery = useContext(DeliveryContext);
+    const [formData, setFormData] = useState<FormDataAllegro>(() => {
+        if (!delivery) return {};
+        const fields = pcParametersAll.filter(p => !p.displayedIf && !p.restrictions?.multipleChoices && (p.type === 'dictionary' || p.type === 'string'))
+            .map((p, index) => ({ attribute_id: index, name: p.name, type: p.type === 'dictionary' ? '2' : '0',
+                options: (p.dictionary ?? []).map((op, i) => ({ option_id: i, value: op.value })) }));
+        const { values } = deliveryFields(delivery, fields);
+        return Object.fromEntries(fields.flatMap(f => {
+            const value = values['attribute_' + f.attribute_id];
+            return typeof value === 'string' ? [[f.name, value]] : [];
+        }));
+    });
     const normalizeIdValue = (value: unknown) => {
         if (value == null) return null;
         if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -1207,7 +1222,7 @@ function AddGamingPC(props: AddProductProps) {
                             </div>
                         </div>
 
-                        <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="aktywność" />
+                        <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
                         <TextField label="Tytuł" type="text"{...register("name", {
                             onBlur: async (e) => {
                                 const value = e.target.value;
@@ -1243,6 +1258,7 @@ function AddGamingPC(props: AddProductProps) {
 
                         <Autocomplete
                             options={producers}
+                            value={producers.find(p => Number(p.producer_id) === Number(watch("producer"))) ?? null}
                             getOptionLabel={(option) => {
                                 if (!option || typeof option === "string") return option ?? "";
                                 return option.name ?? "";
@@ -1257,7 +1273,6 @@ function AddGamingPC(props: AddProductProps) {
                             )}
                             renderInput={(params) => <TextField {...params} label="Producent" />}
                             onChange={(_, value) => {
-                                setLoading(true);
                                 setValue("producer", value?.producer_id || 0);
                             }}
                         />
@@ -1536,6 +1551,7 @@ function AddGamingPC(props: AddProductProps) {
                         <button type="button" onClick={handleAddAllegroOffer} disabled={loading || !images.imagesReady || images.uploadingImages}>Dodaj produkt allegro</button>
                     </ThemeProvider>
                 </Box>
+                <TemplateResetButton disabled={loading || images.uploadingImages} />
             </form>
             <div className="preview">
 

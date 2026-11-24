@@ -26,6 +26,7 @@ export type MonitorAllegroDescriptionInput = {
   connectors: string;
   hdr: string;
   speakers?: boolean;
+  touchscreen?: boolean;
   pivot: string;
   additionalInfo: string;
   extraFeatures?: string;
@@ -246,6 +247,7 @@ export const buildMonitorAllegroDescription = (
     ["Złącza", input.connectors],
     ["HDR", input.hdr],
     ["Głośniki", input.speakers ? "wbudowane" : ""],
+    ["Ekran dotykowy", input.touchscreen ? "tak" : ""],
   ]
     .filter(([, value]) => String(value ?? "").trim())
     .map(([label, value]) => `<li>✅ ${label}: ${escapeHtml(value)}</li>`)

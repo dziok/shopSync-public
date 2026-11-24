@@ -2,6 +2,7 @@ import { HttpService } from "@nestjs/axios";
 import {
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -52,6 +53,7 @@ interface AllegroProdTokenResponse {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private allegroProdAccountsState?: AllegroProdAccountsState;
   private allegroProdAccountsStateLoaded = false;
   private pendingAllegroProdAccountsLoad?: Promise<void>;
@@ -134,19 +136,22 @@ export class AuthService {
       throw new UnauthorizedException("invalid password");
     }
 
-    const [shoperToken, apiloToken] = await Promise.all([
-      this.authorizeShoper(),
-      this.authorizeApilo(),
-    ]);
-
-    const jwtPayload: JwtPayload = {
-      shoperToken: shoperToken,
-      apiloToken: apiloToken,
-    };
+    const shoperToken = await this.authorizeShoper();
+    let apiloToken = "";
+    try {
+      apiloToken = await this.authorizeApilo();
+    } catch (error) {
+      this.logger.warn(`Apilo is unavailable during login: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
 
     return {
-      access_token: this.jwtService.sign(jwtPayload),
+      access_token: this.jwtService.sign({ shoperToken } satisfies JwtPayload),
+      apilo_available: Boolean(apiloToken),
     };
+  }
+
+  createSession(shoperToken: string) {
+    return { access_token: this.jwtService.sign({ shoperToken } satisfies JwtPayload) };
   }
 
   private getBasicAuthHeader() {

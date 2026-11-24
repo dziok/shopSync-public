@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form"
 import { useEffect, useState } from "react";
@@ -51,9 +53,10 @@ interface IFormInput {
 
 function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     const [portsListString, setPortsListString] = useState("");
-    const { register, handleSubmit, watch, setValue, control } = useForm<IFormInput>()
+    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
+    const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages);
     const [addToApilo, setAddToApilo] = useState(true);
     // const [apiloImageUUIDS, setApiloImageUUIDS] = useState<string[]>([]);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
@@ -354,7 +357,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     >
                         <ThemeProvider theme={MainTheme}>
                             <h2>Dodaj uszkodzony laptop</h2>
-                            <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
+                            <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField label="Tytuł" type="text"{...register("name")} />
                             <FormControl fullWidth >
                                 <InputLabel>Producent</InputLabel>
@@ -535,7 +538,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
 
                             <ProductImageManager {...images} />
 
-                            <Button variant="outlined" type="reset"  >Reset formularza</Button>
+                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages} />
                             <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
                             </ApiloSubmitControls>

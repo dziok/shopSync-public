@@ -5,12 +5,14 @@ import {
   HttpStatus,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Config } from "../config/config";
 import { JwtPayload } from "../auth/auth.dto";
+import { ApiloTokenService } from "../auth/apilo-token.service";
 import axios from "axios";
 import { firstValueFrom } from "rxjs";
 import {
@@ -64,12 +66,14 @@ type ShoperDeliveryJob = {
 
 @Injectable()
 export class ProductService {
+  private readonly logger = new Logger(ProductService.name);
   private shoperDeliveryJobs = new Map<string, ShoperDeliveryJob>();
 
   constructor(
     private httpService: HttpService,
     private config: ConfigService<Config, true>,
     private relatedProductsService: RelatedProductsService,
+    private readonly apiloTokenService: ApiloTokenService,
   ) {}
 
   private extractRelatedPackId(dto: Record<string, any>) {
@@ -107,6 +111,37 @@ export class ProductService {
 
   private getApiloUrl(path: string) {
     return `${getApiloBaseUrl()}${path}`;
+  }
+
+  private apiloRequestError(error: unknown, operation: string, creationAttempted = false): HttpException {
+    if (error instanceof HttpException) return error;
+    if (!axios.isAxiosError(error)) {
+      return new HttpException(`${operation}: nieoczekiwany błąd backendu.`, HttpStatus.BAD_GATEWAY);
+    }
+
+    const status = error.response?.status;
+    const data = error.response?.data;
+    const details = [data, data?.error_description, data?.description, data?.message]
+      .find((value): value is string => typeof value === "string" && value.trim().length > 0)
+      ?.trim().slice(0, 500);
+    const unknownOutcome = creationAttempted && (!status || status >= 500);
+    const suffix = unknownOutcome
+      ? " Nie wiadomo, czy Apilo zapisało produkt. Sprawdź go po SKU przed ponowieniem."
+      : "";
+    const description = status === 401
+      ? "Apilo odrzuciło token. Odnów połączenie w panelu Apilo."
+      : status === 429
+        ? "Przekroczono limit zapytań Apilo. Spróbuj ponownie za chwilę."
+        : details || (status ? `Apilo zwróciło HTTP ${status}.` : "Brak odpowiedzi z Apilo.");
+    const responseStatus = status === 401 || status === 429 || (status && status >= 500)
+      ? HttpStatus.BAD_GATEWAY
+      : status && status >= 400 && status < 500
+        ? HttpStatus.BAD_REQUEST
+        : error.code === "ECONNABORTED" || error.code === "ETIMEDOUT"
+          ? HttpStatus.GATEWAY_TIMEOUT
+          : HttpStatus.BAD_GATEWAY;
+
+    return new HttpException(`${operation}: ${description}${status ? ` (HTTP ${status})` : ""}${suffix}`, responseStatus);
   }
 
   private getShoperStorefrontUrl(path: string) {
@@ -226,92 +261,37 @@ export class ProductService {
     return response.data;
   }
 
-  async addInApilo(dto: Record<string, string>, decodedTokens: JwtPayload) {
+  async addInApilo(dto: Record<string, string>, _decodedTokens: JwtPayload) {
     const url = this.getApiloUrl("/warehouse/product/");
+    const apiloToken = await this.apiloTokenService.getAccessToken();
     const headers = {
-      Authorization: `Bearer ${decodedTokens.apiloToken}`,
+      Authorization: `Bearer ${apiloToken}`,
       "Content-Type": "application/json",
       Accept: "application/json",
     };
 
-    const isArrayPayload = Array.isArray(dto);
-    const primaryPayload = dto;
-    const fallbackPayloads: any[] = [];
-    if (isArrayPayload) {
-      fallbackPayloads.push({ products: dto });
-      if (dto.length) {
-        fallbackPayloads.push(dto[0]);
-      }
-    } else if (dto && typeof dto === "object" && "products" in (dto as any)) {
-      const products = (dto as any).products;
-      fallbackPayloads.push(products);
-      if (Array.isArray(products) && products.length) {
-        fallbackPayloads.push(products[0]);
-      }
-    } else if (dto && typeof dto === "object") {
-      fallbackPayloads.push({ products: [dto] });
-    }
-
     try {
       const apiloResponse = await this.httpService.axiosRef.post(
         url,
-        primaryPayload,
-        { headers },
+        dto,
+        { headers, timeout: 60_000 },
       );
+      if (!apiloResponse.data?.products || !Object.keys(apiloResponse.data.products).length) {
+        throw new HttpException(
+          "Apilo nie potwierdziło utworzenia produktu. Sprawdź go po SKU przed ponowieniem.",
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
       return apiloResponse.data;
     } catch (e) {
-      if (axios.isAxiosError(e)) {
-        const status = e.response?.status;
-        const data = e.response?.data ?? e.message;
-        console.error("Apilo add error:", status);
-
-        const shouldRetry =
-          status === 500 &&
-          typeof data?.message === "string" &&
-          data.message.includes("ServiceNotFoundException") &&
-          fallbackPayloads.length > 0;
-
-        if (shouldRetry) {
-          for (const [index, fallbackPayload] of fallbackPayloads.entries()) {
-            try {
-              console.warn(
-                `Apilo add retry with fallback payload shape #${index + 1}`,
-              );
-              const retryResponse = await this.httpService.axiosRef.post(
-                url,
-                fallbackPayload,
-                { headers },
-              );
-              return retryResponse.data;
-            } catch (retryError) {
-              if (axios.isAxiosError(retryError)) {
-                const retryStatus = retryError.response?.status;
-                const retryData =
-                  retryError.response?.data ?? retryError.message;
-                console.error("Apilo add retry error:", retryStatus);
-                if (retryStatus && retryStatus >= 400 && retryStatus <= 499) {
-                  throw new BadRequestException(retryData);
-                }
-              } else {
-                throw new InternalServerErrorException();
-              }
-            }
-          }
-          throw new InternalServerErrorException(data);
-        }
-
-        if (status && status >= 400 && status <= 499) {
-          throw new BadRequestException(data);
-        }
-        throw new InternalServerErrorException(data);
-      }
-      throw new InternalServerErrorException();
+      this.logger.warn(`Apilo product creation failed: ${axios.isAxiosError(e) ? e.response?.status ?? e.code ?? "network" : "unexpected"}`);
+      throw this.apiloRequestError(e, "Dodanie produktu do Apilo", true);
     }
   }
 
   async updateApiloProduct(
     dto: Record<string, any>,
-    decodedTokens: JwtPayload,
+    _decodedTokens: JwtPayload,
   ) {
     const sku = String(dto?.sku ?? dto?.SKU ?? "").trim();
     if (!sku) {
@@ -322,7 +302,7 @@ export class ProductService {
         this.getApiloUrl("/warehouse/product/"),
         {
           headers: {
-            Authorization: `Bearer ${decodedTokens.apiloToken}`,
+            Authorization: `Bearer ${await this.apiloTokenService.getAccessToken()}`,
             "Content-Type": "application/json",
             Accept: "application/json",
           },
@@ -368,7 +348,7 @@ export class ProductService {
         updatePayload,
         {
           headers: {
-            Authorization: `Bearer ${decodedTokens.apiloToken}`,
+            Authorization: `Bearer ${await this.apiloTokenService.getAccessToken()}`,
             "Content-Type": "application/json",
             Accept: "application/json",
           },
@@ -377,7 +357,7 @@ export class ProductService {
 
       return updateResponse.data;
     } catch (e) {
-      if (e instanceof BadRequestException || e instanceof NotFoundException) {
+      if (e instanceof HttpException) {
         throw e;
       }
       if (axios.isAxiosError(e) && e.response) {
@@ -387,32 +367,25 @@ export class ProductService {
     }
   }
 
-  async addAttributes(dto: Record<string, string>, decodedTokens: JwtPayload) {
+  async addAttributes(dto: Record<string, string>, _decodedTokens: JwtPayload) {
     try {
       const apiloResponse = await this.httpService.axiosRef.patch(
         this.getApiloUrl("/warehouse/product/attributes/"),
         dto,
         {
           headers: {
-            Authorization: `Bearer ${decodedTokens.apiloToken}`,
+            Authorization: `Bearer ${await this.apiloTokenService.getAccessToken()}`,
             "Content-Type": "application/json",
             Accept: "application/json",
           },
+          timeout: 30_000,
         },
       );
 
       return apiloResponse.data;
     } catch (e) {
-      if (axios.isAxiosError(e)) {
-        const status = e.response?.status;
-        const data = e.response?.data ?? e.message;
-        console.error("Apilo addAttributes error:", status);
-        if (status && status >= 400 && status <= 499) {
-          throw new BadRequestException(data);
-        }
-        throw new InternalServerErrorException(data);
-      }
-      throw new InternalServerErrorException();
+      this.logger.warn(`Apilo attributes failed: ${axios.isAxiosError(e) ? e.response?.status ?? e.code ?? "network" : "unexpected"}`);
+      throw this.apiloRequestError(e, "Zapis atrybutów w Apilo");
     }
   }
 
@@ -1031,34 +1004,43 @@ export class ProductService {
 
   async apiloProductslist(
     params: Record<string, string>,
-    decodedTokens: JwtPayload,
+    _decodedTokens: JwtPayload,
   ) {
-    try {
-      const apiloResponse = await this.httpService.axiosRef.get(
-        this.getApiloUrl("/warehouse/product/"),
-        {
-          headers: {
-            Authorization: `Bearer ${decodedTokens.apiloToken}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const apiloResponse = await this.httpService.axiosRef.get(
+          this.getApiloUrl("/warehouse/product/"),
+          {
+            headers: {
+              Authorization: `Bearer ${await this.apiloTokenService.getAccessToken()}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            params,
+            timeout: 20_000,
           },
-          params: params, // <- KLUCZOWE! Dodajesz parametry do zapytania
-        },
-      );
-
-      return apiloResponse.data;
-    } catch (e) {
-      console.error("API Error:", e.response?.status ?? e.message);
-      throw new InternalServerErrorException();
+        );
+        if (!Array.isArray(apiloResponse.data?.products) || !Number.isFinite(Number(apiloResponse.data?.totalCount))) {
+          throw new HttpException("Apilo zwróciło nieprawidłową listę produktów.", HttpStatus.BAD_GATEWAY);
+        }
+        return apiloResponse.data;
+      } catch (error) {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        if (attempt === 0 && axios.isAxiosError(error) && (!status || [500, 502, 503, 504].includes(status))) {
+          await new Promise((resolve) => setTimeout(resolve, 700));
+          continue;
+        }
+        throw this.apiloRequestError(error, "Pobranie produktów z Apilo");
+      }
     }
   }
 
-  async apiloProductDelete(id: string, decodedTokens: JwtPayload) {
+  async apiloProductDelete(id: string, _decodedTokens: JwtPayload) {
     try {
       const url = this.getApiloUrl(`/warehouse/product/${id}/`);
       const apiloDeleteResponse = await this.httpService.axiosRef.delete(url, {
         headers: {
-          Authorization: `Bearer ${decodedTokens.apiloToken}`,
+          Authorization: `Bearer ${await this.apiloTokenService.getAccessToken()}`,
           "Content-Type": "application/json",
           Accept: "application/json",
         },
@@ -1066,6 +1048,7 @@ export class ProductService {
 
       return apiloDeleteResponse.data;
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       if (
         axios.isAxiosError(e) &&
         e.response &&

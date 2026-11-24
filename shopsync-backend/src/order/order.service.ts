@@ -1,11 +1,13 @@
 import { HttpService } from '@nestjs/axios';
 import {
     BadRequestException,
+    HttpException,
     Injectable,
     InternalServerErrorException,
 } from '@nestjs/common';
 import axios from 'axios';
 import { JwtPayload } from '../auth/auth.dto';
+import { ApiloTokenService } from '../auth/apilo-token.service';
 import {
     ApiloLineSettings,
     ApiloSettingsService,
@@ -20,6 +22,7 @@ export class ApiloOrderService {
     constructor(
         private httpService: HttpService,
         private readonly apiloSettingsService: ApiloSettingsService,
+        private readonly apiloTokenService: ApiloTokenService,
     ) { }
 
     private getApiloUrl(path: string) {
@@ -323,6 +326,28 @@ export class ApiloOrderService {
             .filter((id: number, index: number, arr: number[]) => baseTargets.includes(id) && arr.indexOf(id) === index);
     }
 
+    public getLineSchedulePreview(line: ApiloLineSettings, start: Date = new Date(), days = 14) {
+        const tz = line.monthlyComputerAssignment?.timezone
+            || line.tabRotation?.timezone
+            || line.autoSchedule?.timezone
+            || this.DEFAULT_TZ;
+        const startDate = this.getDateStringInZone(start, tz);
+        const length = Math.max(1, Math.min(31, Math.floor(days)));
+
+        return Array.from({ length }, (_, offset) => {
+            const date = this.addDays(startDate, offset);
+            const reference = new Date(`${date}T12:00:00Z`);
+            const weekday = this.getWeekdayFromDateString(date);
+            const dayEnabled = !!line.active && !(line.autoSchedule?.weekendOnly && weekday >= 6);
+            const targetStatusIds = dayEnabled
+                ? line.monthlyComputerAssignment
+                    ? this.getEffectiveMonthlyComputerTargetStatusIds(line, reference)
+                    : this.getEffectiveTargetStatusIds(line, reference)
+                : [];
+            return { date, targetStatusIds };
+        });
+    }
+
 
     // Pula wylosowanych docelowych zakładek dla każdej linii (klucz: sourceStatusId)
     private shuffledTargetsBySource: Record<number, number[]> = {};
@@ -609,32 +634,27 @@ export class ApiloOrderService {
 
 
     /**
-     * Pobiera zamówienia o danym statusie (Wersja dla endpointów HTTP – używa tokena z decodedTokens).
+     * Pobiera zamówienia o danym statusie dla endpointów HTTP.
      */
     async getOrdersByStatus(
     statusId: number,
-    decodedTokens: JwtPayload,
+    _decodedTokens: JwtPayload,
     limit = 100,
     offset = 0,
 ) {
-    return this.getOrdersByStatusWithToken(
-        statusId,
-        decodedTokens.apiloToken,
-        limit,
-        offset,
-    );
+    return this.getOrdersByStatusInternal(statusId, limit, offset);
 }
 
     /**
-     * Wewnętrzna metoda pobierania zamówień po statusie (używa bezpośrednio tokena Apilo, do crona).
+     * Wewnętrzna metoda pobierania zamówień po statusie.
      */
-    private async getOrdersByStatusWithToken(
+    private async getOrdersByStatusInternal(
     statusId: number,
-    apiloToken: string,
     limit = 100,
     offset = 0,
 ) {
     try {
+        const apiloToken = await this.apiloTokenService.getAccessToken();
         const response = await this.httpService.axiosRef.get(
             this.getApiloUrl('/orders/'),
             {
@@ -651,6 +671,7 @@ export class ApiloOrderService {
         );
         return response.data; // { orders: [...], totalCount, ... }
     } catch (e) {
+        if (e instanceof HttpException) throw e;
         if (axios.isAxiosError(e) && e.response) {
             throw new BadRequestException(e.response.data);
         }
@@ -659,29 +680,25 @@ export class ApiloOrderService {
 }
 
     /**
-     * Aktualizuje status pojedynczego zamówienia (Wersja z decodedTokens dla endpointów HTTP).
+     * Aktualizuje status pojedynczego zamówienia dla endpointów HTTP.
      */
     async updateOrderStatus(
     orderId: number | string,
     newStatusId: number,
-    decodedTokens: JwtPayload,
+    _decodedTokens: JwtPayload,
 ) {
-    return this.updateOrderStatusWithToken(
-        orderId,
-        newStatusId,
-        decodedTokens.apiloToken,
-    );
+    return this.updateOrderStatusInternal(orderId, newStatusId);
 }
 
     /**
-     * Wewnętrzna metoda aktualizacji statusu zamówienia (używa bezpośrednio tokena Apilo, do crona).
+     * Wewnętrzna metoda aktualizacji statusu zamówienia.
      */
-    private async updateOrderStatusWithToken(
+    private async updateOrderStatusInternal(
     orderId: number | string,
     newStatusId: number,
-    apiloToken: string,
 ) {
     try {
+        const apiloToken = await this.apiloTokenService.getAccessToken();
         const response = await this.httpService.axiosRef.put(
             this.getApiloUrl(`/orders/${orderId}/status/`),
             { status: newStatusId },
@@ -695,6 +712,7 @@ export class ApiloOrderService {
         );
         return response.data; // np. { "updates": "1" }
     } catch (e) {
+        if (e instanceof HttpException) throw e;
         if (axios.isAxiosError(e) && e.response) {
             throw new BadRequestException(e.response.data);
         }
@@ -709,23 +727,17 @@ export class ApiloOrderService {
     async randomlyAssignFromStatus(
     sourceStatusId: number,
     targetStatusIds: number[],
-    decodedTokens: JwtPayload,
+    _decodedTokens: JwtPayload,
 ) {
-    return this.randomlyAssignFromStatusWithToken(
-        sourceStatusId,
-        targetStatusIds,
-        decodedTokens.apiloToken,
-    );
+    return this.randomlyAssignFromStatusInternal(sourceStatusId, targetStatusIds);
 }
 
     /**
-     * Losowe przydzielanie zamówień – wersja dla crona (używa bezpośrednio tokena).
-     * (Uwaga: metoda zachowana dla kompatybilności; używa limitu domyślnego 2 i priorytetów domyślnych)
+     * Losowe przydzielanie zamówień z domyślnym limitem i priorytetami.
      */
-    async randomlyAssignFromStatusWithToken(
+    private async randomlyAssignFromStatusInternal(
     sourceStatusId: number,
     targetStatusIds: number[],
-    apiloToken: string,
 ) {
     // Przygotuj domyślne ustawienia linii na podstawie parametrów
     const lineConfig: ApiloLineSettings = {
@@ -740,14 +752,14 @@ export class ApiloOrderService {
         lineConfig.targetLimits[id] = 2;
     }
     // Wykonaj przydzielanie zamówień za pomocą nowych ustawień
-    return this.assignOrdersForLine(lineConfig, apiloToken);
+    return this.assignOrdersForLine(lineConfig);
 }
 
     /**
      * Przydziela zamówienia z linii (źródłowy status line.sourceStatusId) do dostępnych statusów docelowych zgodnie z ustawieniami linii.
      * Zwraca listę rozpatrzonych zamówień oraz statystyki przydziału.
      */
-    async assignOrdersForLine(line: ApiloLineSettings, apiloToken: string) {
+    async assignOrdersForLine(line: ApiloLineSettings) {
     const sourceStatusId = line.sourceStatusId;
     const usesMonthlyComputerAssignment = !!line.monthlyComputerAssignment;
     const targetStatusIds = usesMonthlyComputerAssignment
@@ -777,7 +789,7 @@ export class ApiloOrderService {
     }
 
     // 1. Pobierz wszystkie zamówienia ze statusu źródłowego
-    const data = await this.getOrdersByStatusWithToken(sourceStatusId, apiloToken);
+    const data = await this.getOrdersByStatusInternal(sourceStatusId);
     const allOrders = data.orders ?? [];
     // 1a. Odfiltruj zamówienia przekraczające limit dużych zamówień
     // Linia 1 liczy komputery (MAR, a ZKPC x2), linia 2 zostaje po LAP.
@@ -821,7 +833,7 @@ export class ApiloOrderService {
         const currentOrderCounts: Record<number, number> = {};
         for (const targetId of orderedTargets) {
             try {
-                const targetData = await this.getOrdersByStatusWithToken(targetId, apiloToken, 100);
+                const targetData = await this.getOrdersByStatusInternal(targetId, 100);
                 currentOrderCounts[targetId] =
                     typeof targetData.totalCount === 'number'
                         ? targetData.totalCount
@@ -840,7 +852,7 @@ export class ApiloOrderService {
             const chosenStatus = this.chooseLeastLoadedTargetWithCapacity(orderedTargets, monthlyTotals, currentOrderCounts, 2);
             if (!chosenStatus) break;
 
-            await this.updateOrderStatusWithToken(order.id, chosenStatus, apiloToken);
+            await this.updateOrderStatusInternal(order.id, chosenStatus);
             order.orderStatus = chosenStatus;
             order.computerCount = computerCount;
             monthlyTotals[chosenStatus] = (monthlyTotals[chosenStatus] ?? 0) + computerCount;
@@ -877,7 +889,7 @@ export class ApiloOrderService {
     const currentCounts: Record<number, number> = {};
     for (const targetId of orderedTargets) {
         try {
-            const targetData = await this.getOrdersByStatusWithToken(targetId, apiloToken, 100);
+            const targetData = await this.getOrdersByStatusInternal(targetId, 100);
             const totalCount =
                 typeof targetData.totalCount === 'number'
                     ? targetData.totalCount
@@ -933,7 +945,7 @@ export class ApiloOrderService {
             break;
         }
         // 5. Aktualizuj status zamówienia w Apilo
-        await this.updateOrderStatusWithToken(order.id, chosenStatus, apiloToken);
+        await this.updateOrderStatusInternal(order.id, chosenStatus);
         this.lastTargetBySource[sourceStatusId] = chosenStatus;
         order.orderStatus = chosenStatus; // zakładamy, że pole orderStatus reprezentuje status
         currentCounts[chosenStatus] = (currentCounts[chosenStatus] ?? 0) + 1;

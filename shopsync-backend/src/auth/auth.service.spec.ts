@@ -2,6 +2,7 @@ import axios from "axios";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { Logger } from "@nestjs/common";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -131,5 +132,32 @@ describe("AuthService Allegro accounts", () => {
     await expect(createService().setDefaultAllegroProdAccount("missing")).rejects.toThrow();
 
     expect(JSON.parse(await readFile(file, "utf8")).activeAccountId).toBe("first");
+  });
+});
+
+describe("AuthService app login", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("allows Shoper login when Apilo token refresh is rejected", async () => {
+    const config = { get: jest.fn((key: keyof Config) => ({
+      appUsername: "operator", appPassword: "secret",
+    })[key]) } as unknown as ConfigService<Config, true>;
+    const jwt = { sign: jest.fn().mockReturnValue("session-token") } as unknown as JwtService;
+    const service = new AuthService({} as HttpService, config, jwt, {} as ApiloTokenService);
+    jest.spyOn(service, "authorizeShoper").mockResolvedValue("shoper-token");
+    jest.spyOn(service, "authorizeApilo").mockRejectedValue(new Error("Apilo HTTP 401"));
+    jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+
+    await expect(service.loginShoperAndApilo({ login: "operator", password: "secret" }))
+      .resolves.toEqual({ access_token: "session-token", apilo_available: false });
+    expect(jwt.sign).toHaveBeenCalledWith({ shoperToken: "shoper-token" });
+  });
+
+  it("does not embed the Apilo token in a new application session", async () => {
+    const jwt = { sign: jest.fn().mockReturnValue("session-token") } as unknown as JwtService;
+    const service = new AuthService({} as HttpService, {} as ConfigService<Config, true>, jwt, {} as ApiloTokenService);
+
+    expect(service.createSession("shoper-token")).toEqual({ access_token: "session-token" });
+    expect(jwt.sign).toHaveBeenCalledWith({ shoperToken: "shoper-token" });
   });
 });

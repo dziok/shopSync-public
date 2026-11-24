@@ -53,6 +53,10 @@ export const getShoperErrorMessage = (error: unknown, attributes: readonly Named
         return "Wystąpił błąd podczas dodawania produktu do Shopera.";
     }
 
+    if (!error.response) {
+        return "Brak odpowiedzi z backendu. Sprawdź połączenie i stan produktu przed ponowieniem.";
+    }
+
     const responseData = error.response?.data as Record<string, unknown> | undefined;
     const shoperError = responseData?.shoperError ?? responseData;
     const messages = collectMessages(shoperError)

@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form"
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -134,7 +136,7 @@ const getCaseDescriptionForType = (caseType: string) =>
         ? "Mała, kompaktowa obudowa"
         : " Łatwa w rozbudowie, pojemna obudowa ";
 function AddPC(props: AddProductProps) {
-    const { register, handleSubmit, watch, setValue, control, getValues, reset } = useForm<IFormInput>()
+    const { register, handleSubmit, watch, getFieldState, setValue, control, getValues, reset } = useForm<IFormInput>()
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [addToApilo, setAddToApilo] = useState(true);
     const [imageSrc, setImageSrc] = useState<string>("");
@@ -154,6 +156,7 @@ function AddPC(props: AddProductProps) {
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
+    const delivery = useDeliveryAutofill(setValue, getFieldState, setSelectedImages, attributeList, producers);
     let apiloImageUUIDs: string[] | undefined
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
     const [updatingProduct, setUpdatingProduct] = useState(false);
@@ -857,7 +860,6 @@ function AddPC(props: AddProductProps) {
             setLockedParams,
             pcNewParameteres,
             setFormData,
-            setValue,
         });
     };
 
@@ -908,10 +910,6 @@ function AddPC(props: AddProductProps) {
 
     const handleChangeAllegro = (paramName: string, value: any) => {
         setFormData(prev => ({ ...prev, [paramName]: value }));
-        const idx = pcNewParameteres.findIndex(p => p.name === paramName);
-        if (idx !== -1) {
-            setValue(`attribute_${idx}`, value);
-        }
     };
 
     ///////////////Allegro koniec////////////////
@@ -1479,7 +1477,7 @@ function AddPC(props: AddProductProps) {
         portGroups,
         additionalInfoCZ,
         getCpuTypeDescription(shoper_cpuName, "cz"),
-        diskTypesDescriptionsCZ.HDD,
+        diskTypesDescriptionsCZ[shoper_diskType as keyof typeof diskTypesDescriptionsCZ] ?? "",
         ramTypesDescriptionsCZ.DDR2,
         systemTypeCZ[shoper_system as keyof typeof systemType],
         IncludeCZ,
@@ -1512,7 +1510,7 @@ function AddPC(props: AddProductProps) {
         portGroups,
         additionalInfoSK,
         getCpuTypeDescription(shoper_cpuName, "sk"),
-        diskTypesDescriptionsSK.HDD,
+        diskTypesDescriptionsSK[shoper_diskType as keyof typeof diskTypesDescriptionsSK] ?? "",
         ramTypesDescriptionsSK.DDR2,
         systemTypeSK[shoper_system as keyof typeof systemType],
         IncludeSK,
@@ -1545,7 +1543,7 @@ function AddPC(props: AddProductProps) {
         portGroups,
         additionalInfo,
         getCpuTypeDescription(shoper_cpuName, "pl"),
-        diskTypesDescriptions.HDD,
+        diskTypesDescriptions[shoper_diskType as keyof typeof diskTypesDescriptions] ?? "",
         ramTypesDescriptions.DDR2,
         systemType[shoper_system as keyof typeof systemType] ?? "",
         included,
@@ -1582,10 +1580,20 @@ function AddPC(props: AddProductProps) {
             [1245, "Chipset karty graficznej"], [1244, "Rodzaj karty graficznej"],
             [913, "Typ obudowy"], [1255, "Złącza karty graficznej"], [1256, "Moc zasilacza"],
             [1257, "Komunikacja"], [1258, "Złącza zewnętrzne płyty głównej"], [869, "Złącza obudowy"],
+            ...(includedAttributeId ? [[Number(includedAttributeId), "Załączone wyposażenie"] as const] : []),
         ] as const;
         const attributesById = new Map(attributeList.map(attribute => [Number(attribute.attribute_id), attribute]));
         const skipped: string[] = [];
         let imported = 0;
+        if (selectedProduct?.name) {
+            setValue("name", selectedProduct.name, { shouldDirty: true, shouldValidate: true });
+            imported++;
+        }
+        const sku = formData["Kod producenta"];
+        if (typeof sku === "string" && sku.trim()) {
+            setValue("SKU", sku, { shouldDirty: true, shouldValidate: true });
+            imported++;
+        }
         for (const [id, name] of fields) {
             const raw = formData[name];
             if (raw == null || raw === "" || (Array.isArray(raw) && !raw.length)) continue;
@@ -1830,7 +1838,7 @@ function AddPC(props: AddProductProps) {
                                         </Button>
 
                                     </div>
-                                    <Button sx={{ mt: '20px', fontSize: '15px' }} onClick={() => handleImportAllegroFormToShoper()}>
+                                    <Button type="button" sx={{ mt: '20px', fontSize: '15px' }} onClick={handleImportAllegroFormToShoper}>
                                         Importuj dane z allegro
                                     </Button>
                                 </div>
@@ -1858,7 +1866,7 @@ function AddPC(props: AddProductProps) {
                                             {loadingShoperOffer ? "Pobieranie..." : "Pobierz"}
                                         </Button>
                                     </div>
-                                    <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="aktywność" />
+                                    <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
                                     <TextField InputLabelProps={{ shrink: true }} required label="tytuł" variant="outlined" type="text" inputProps={{ maxLength: 75 }} {...register("name", {
                                         onBlur: async (e) => {
                                             const value = e.target.value;
@@ -2112,7 +2120,7 @@ function AddPC(props: AddProductProps) {
                                 ) : (
                                     "Dodaj produkt do Allegro"
                                 )}</Button>
-                                <Button variant="outlined" type="button" onClick={handleResetShoperForm} disabled={loading || loadingShoperOffer || updatingProduct}>Reset formularza</Button>
+                                <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleResetShoperForm} />
                             </ThemeProvider>
                         </Box>
                     </form>
@@ -2134,7 +2142,6 @@ function AddPC(props: AddProductProps) {
                             <AllegroParameters
                                 Parameters={pcNewParameteres}
                                 formData={formData}
-                                register={register}
                                 handleChangeAllegro={handleChangeAllegro}
                                 isParamDisabled={isParamDisabled}
                             />

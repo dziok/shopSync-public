@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller, type Path, type PathValue } from "react-hook-form"
 import { useEffect, useRef, useState } from "react";
@@ -98,7 +100,7 @@ interface ProducersResource {
 }
 let deviceType = ""
 function AddPhoneAndroid(props: AddphoneIOSProps) {
-    const { register, handleSubmit, watch, setValue, getValues, reset, control } = useForm<IFormInput>()
+    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, getValues, reset, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, setSelectedImages, imageLinks, setImageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
@@ -133,6 +135,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         ...(offerGroups?.categoryId === Number(categoryId) ? offerGroups.ids : []),
     ], manualAttributeGroupId);
     const phoneAttributes = usePhoneShoperAttributes(API_URL, props.authToken, groupIds);
+    const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, phoneAttributes.attributes, producers);
     let apiloImageUUIDs: string[] = [];
 
     useEffect(() => { setManualAttributeGroupId(""); }, [categoryId]);
@@ -860,7 +863,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
 
                                 </Select>
                             </FormControl>
-                            <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
+                            <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
                             <TextField label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
                             <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
@@ -1072,7 +1075,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             <textarea defaultValue={AndroidTemplateSK('', false, false, false, false, false, "", "", '', '', '', false, false, false, '', '', '')}  {...register("descriptionSK")} />
                             <ProductImageManager {...images} />
 
-                            <Button variant="outlined" type="reset"  >Reset formularza</Button>
+                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
                             <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
                             </ApiloSubmitControls>

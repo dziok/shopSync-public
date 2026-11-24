@@ -21,12 +21,17 @@ import ApiloOrdersPanel from './apiloOrder';
 import ShoperDeliveryTimePanel from './shoperDeliveryTimePanel';
 import RelatedProductsPanel from './relatedProductsPanel';
 import ChatGptFeedPanel from './chatGptFeedPanel';
+import BulkImportPanel from './BulkImportPanel';
+import { TemplateResetContext } from './addProduct/TemplateResetButton';
+import { DeliveryContext, DeliveryReport } from './useDeliveryAutofill';
+import type { DeliveryProduct } from './bulkFormMapping';
 import ApiloTokenStatus from './apiloTokenStatus';
 import TemplateSettingsPanel from './templateSettingsPanel';
 import { applyTemplateSettings, TemplateKey, TemplateSettingsFile, TEMPLATE_NAMES } from './templateSettings';
 
 type AddProductProps = {
     authToken: string
+    onSessionUpdated: (token: string) => void
 }
 type FormData = {
     [paramId: string]: string;
@@ -82,6 +87,10 @@ function CategorySelection(props: AddProductProps) {
     const [showShoperDeliveryTime, setShowShoperDeliveryTime] = useState(false);
     const [showRelatedProducts, setShowRelatedProducts] = useState(false);
     const [showChatGptFeed, setShowChatGptFeed] = useState(false);
+    const [showBulkImport, setShowBulkImport] = useState(false);
+    const [deliveryProduct, setDeliveryProduct] = useState<DeliveryProduct | null>(null);
+    const [deliveryNotice, setDeliveryNotice] = useState('');
+    const [formRevision, setFormRevision] = useState(0);
     const [showTemplateAdmin, setShowTemplateAdmin] = useState(false);
     const [adminTemplateKey, setAdminTemplateKey] = useState<TemplateKey>('pc');
     const [templateSettings, setTemplateSettings] = useState<TemplateSettingsFile | null>(null);
@@ -804,6 +813,7 @@ function CategorySelection(props: AddProductProps) {
     }
 
     const handleChatGptFeed = () => {
+        setShowBulkImport(false);
         setShowTemplateAdmin(false);
         setShowRelatedProducts(false);
         setShowAddMonitor(false);
@@ -820,6 +830,14 @@ function CategorySelection(props: AddProductProps) {
         setShowApiloOrder(false);
         setShowShoperDeliveryTime(false);
         setShowChatGptFeed(true);
+    };
+
+    const handleBulkImport = () => {
+        handleChatGptFeed();
+        setDeliveryProduct(null);
+        setDeliveryNotice('');
+        setShowChatGptFeed(false);
+        setShowBulkImport(true);
     };
 
     const handleToggleCategoryParametersHelper = () => {
@@ -859,7 +877,7 @@ function CategorySelection(props: AddProductProps) {
                     borderRadius: "8px",
                 }}
             >
-                <ApiloTokenStatus authToken={props.authToken} />
+                <ApiloTokenStatus authToken={props.authToken} onSessionUpdated={props.onSessionUpdated} />
 
                 {loadingAllegroToken ? (
                     <button style={buttonStyle()} disabled>
@@ -980,21 +998,22 @@ function CategorySelection(props: AddProductProps) {
 
                 {error && <p style={{ color: "red", width: "100%" }}>{error}</p>}
 
-                <button style={buttonStyle()} onClick={() => openTemplate('pc', handleAddPC)}>Komputery biurowe</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('pc', handleAddPC); }}>Komputery biurowe</button>
                 {/* <button style={buttonStyle()} onClick={handleAddProductClick}>Komputery</button> */}
-                <button style={buttonStyle()} onClick={() => openTemplate('gaming', handleAddGamingPCClick)}>Komputery gamingowe</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('monitor', handleAddMonitorClick)}>Monitory</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('custom', handleAddCustomProductClick)}>Inne</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('damaged-laptop', handleAddDamagedLaptopClick)}>Uszkodzone laptopy</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('laptop-new', handleAddLaptopNew)}>Laptopy nowe</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('ios', handleAddIOSClick)}>Mobilki IOS</button>
-                <button style={buttonStyle()} onClick={() => openTemplate('android', handleAddAndroidClick)}>Mobilki Android</button>
-                <button style={buttonStyle()} onClick={() => { setShowChatGptFeed(false); handleApiloOrder(); }}>zamówienia</button>
-                <button style={buttonStyle()} onClick={() => { setShowChatGptFeed(false); handleShoperDeliveryTime(); }}>czas wysyłki</button>
-                <button style={buttonStyle()} onClick={() => { setShowChatGptFeed(false); handleRelatedProducts(); }}>produkty powiązane</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('gaming', handleAddGamingPCClick); }}>Komputery gamingowe</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('monitor', handleAddMonitorClick); }}>Monitory</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('custom', handleAddCustomProductClick); }}>Inne</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('damaged-laptop', handleAddDamagedLaptopClick); }}>Uszkodzone laptopy</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('laptop-new', handleAddLaptopNew); }}>Laptopy nowe</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('ios', handleAddIOSClick); }}>Mobilki IOS</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('android', handleAddAndroidClick); }}>Mobilki Android</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleApiloOrder(); }}>zamówienia</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleShoperDeliveryTime(); }}>czas wysyłki</button>
+                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleRelatedProducts(); }}>produkty powiązane</button>
                 <button style={buttonStyle(showChatGptFeed ? '#3c743c' : 'rgb(54 52 52)')} onClick={handleChatGptFeed}>Feed ChatGPT</button>
+                <button style={buttonStyle(showBulkImport ? '#3c743c' : 'rgb(54 52 52)')} onClick={handleBulkImport}>Dostawa CSV</button>
                 <button style={buttonStyle(showTemplateAdmin ? '#3c743c' : 'rgb(54 52 52)')}
-                    onClick={() => { setShowChatGptFeed(false); setAdminTemplateKey(activeTemplateKey ?? adminTemplateKey); setShowTemplateAdmin(true); }}>
+                    onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); setAdminTemplateKey(activeTemplateKey ?? adminTemplateKey); setShowTemplateAdmin(true); }}>
                     Ustawienia szablonów
                 </button>
                 <button
@@ -1069,11 +1088,27 @@ function CategorySelection(props: AddProductProps) {
             {showTemplateAdmin && templateSettings && <TemplateSettingsPanel authToken={props.authToken}
                 initialKey={adminTemplateKey} settings={templateSettings} onSaved={setTemplateSettings}
                 onClose={() => setShowTemplateAdmin(false)} />}
+            {<BulkImportPanel visible={showBulkImport} authToken={props.authToken} editing={!!deliveryProduct}
+                onBack={handleBulkImport} notice={deliveryNotice} onOpen={product => {
+                    const { template } = product.draft;
+                    if (template === 'unknown') return;
+                    const actions = { pc: handleAddPC, monitor: handleAddMonitorClick, ios: handleAddIOSClick,
+                        android: handleAddAndroidClick, gaming: handleAddGamingPCClick, custom: handleAddCustomProductClick,
+                        'damaged-laptop': handleAddDamagedLaptopClick, 'laptop-new': handleAddLaptopNew };
+                    setDeliveryProduct(product);
+                    setDeliveryNotice('');
+                    openTemplate(template, actions[template]);
+                }} />}
             {(showTemplateAdmin || activeTemplateKey) && !templateSettings && <div style={{ padding: 20, textAlign: 'center' }}>
                 {templateSettingsError ? <><span>Nie udało się pobrać ustawień szablonów.</span>
                     <button onClick={() => void loadTemplateSettings()}>Ponów</button></> : 'Ładowanie ustawień szablonów…'}
             </div>}
-            {!showTemplateAdmin && templateSettings && <>
+            {!showTemplateAdmin && templateSettings && <TemplateResetContext.Provider value={() => {
+                setDeliveryProduct(null);
+                setDeliveryNotice('');
+                setShowBulkImport(false);
+                setFormRevision(revision => revision + 1);
+            }}><DeliveryReport.Provider value={setDeliveryNotice}><DeliveryContext.Provider key={formRevision + (showBulkImport && deliveryProduct ? '-delivery' : '-manual')} value={showBulkImport ? deliveryProduct : null}>
             {activeTemplateKey && (() => {
                 const override = templateSettings.templates[activeTemplateKey].shoper.categoryId;
                 return override !== null ? <div style={{ margin: '0 auto 10px', maxWidth: 1100, color: '#d6dfd6', textAlign: 'left' }}>
@@ -1090,7 +1125,7 @@ function CategorySelection(props: AddProductProps) {
             {showAddAndroid && <AddPhoneAndroid authToken={props.authToken} />}
             {showAddCpu && <AddCpu authToken={props.authToken} />}
             {showAddPC && <AddPC key={`pc-${allegroSessionKey}`} authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} allegroAccountId={activeAllegroAccountId} />}
-            </>}
+            </DeliveryContext.Provider></DeliveryReport.Provider></TemplateResetContext.Provider>}
             {!showTemplateAdmin && showApiloOredr && <ApiloOrdersPanel authToken={props.authToken} />}
             {!showTemplateAdmin && showShoperDeliveryTime && <ShoperDeliveryTimePanel authToken={props.authToken} />}
             {!showTemplateAdmin && showOnlyRelatedProducts && <RelatedProductsPanel authToken={props.authToken} />}

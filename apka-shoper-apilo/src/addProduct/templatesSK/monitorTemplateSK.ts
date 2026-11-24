@@ -22,7 +22,8 @@ export const monitorTemplateSK = (
     showTn: string,
     portsLI: string,
     extraFeatures = "",
-    speakers = false
+    speakers = false,
+    touchscreen = false
 
 ) => renderConditionalDescription(`
  <div id="mainContainer" style="display: flex; align-items: center; flex-direction: column;">
@@ -59,6 +60,7 @@ export const monitorTemplateSK = (
                     <li>Porty: ${ports}</li>
                     <li>HDR: ${HDR}</li>
                     ${speakers ? '<li>Reproduktory: vstavané</li>' : ''}
+                    ${touchscreen ? '<li>Dotyková obrazovka: áno</li>' : ''}
                 </ul>
             </div>
         </div>

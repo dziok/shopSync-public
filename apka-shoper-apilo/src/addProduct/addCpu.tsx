@@ -1,3 +1,4 @@
+import { TemplateResetButton } from './TemplateResetButton';
 import axios from "axios";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { useState, useEffect } from "react";
@@ -578,6 +579,7 @@ function AddCpu(props: AddProductProps) {
                         </ApiloSubmitControls>
                     </ThemeProvider>
                 </Box>
+                <TemplateResetButton disabled={loading} />
             </form>
             <div className="preview">
                 <div style={{ backgroundColor: 'white', color: 'black', lineHeight: "0.8", padding: '20px' }}>

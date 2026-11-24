@@ -29,7 +29,7 @@ function App() {
     <>
       {
         isLogged
-          ? (<CategorySelection authToken={authToken} />)
+          ? (<CategorySelection authToken={authToken} onSessionUpdated={setAuthToken} />)
           : (<Login
             setLogin={setLogin}
             setPassword={setPassword}

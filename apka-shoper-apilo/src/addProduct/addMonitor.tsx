@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form"
 import { useEffect, useMemo, useState } from "react";
@@ -92,7 +94,7 @@ function AddMonitor(props: AddMonitorProps) {
     const MONITOR_ATTRIBUTE_GROUP_ID = "50"; // ID grupy atrybutów monitorów w Shoper
     const BASE_ATTRIBUTE_GROUP_ID = "16"; // ID grupy atrybutów bazowych (Stan/Gwarancja)
     const [portsListString, setPortsListString] = useState("");
-    const { register, handleSubmit, watch, setValue, control, getValues } = useForm<IFormInput>()
+    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, control, getValues } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
@@ -143,6 +145,7 @@ function AddMonitor(props: AddMonitorProps) {
         });
         return Array.from(byId.values());
     }, [baseAttributes, monitorAttributes]);
+    const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, allAttributes, producers);
 
     const normalizeIdValue = (value: unknown) => {
         if (value == null) return null;
@@ -1219,6 +1222,7 @@ function AddMonitor(props: AddMonitorProps) {
         ? String(watch(`attribute_${extraFeaturesAttributeId}`, "") ?? "")
         : "";
     const speakers = shoperEnabled(getAttrValueByName("Głośniki"));
+    const touchscreen = shoperEnabled(getAttrValueByName("Ekran dotykowy"));
 
     useEffect(() => {
         if (!extraFeaturesAttributeId || !pendingImportedExtraFeatures) return;
@@ -1277,7 +1281,8 @@ function AddMonitor(props: AddMonitorProps) {
         showTN,
         portsListString,
         extraFeatures,
-        speakers
+        speakers,
+        touchscreen
     ));
     let descriptionCZ = watch("descriptionCZ", monitorTemplateCZ(
         producent,
@@ -1300,7 +1305,8 @@ function AddMonitor(props: AddMonitorProps) {
         showTN,
         portsListString,
         extraFeaturesCZ || extraFeatures,
-        speakers
+        speakers,
+        touchscreen
     ));
     let descriptionSK = watch("descriptionSK", monitorTemplateSK(
         producent,
@@ -1323,7 +1329,8 @@ function AddMonitor(props: AddMonitorProps) {
         showTN,
         portsListString,
         extraFeaturesSK || extraFeatures,
-        speakers
+        speakers,
+        touchscreen
     ));
 
     const selectedProducerName =
@@ -1350,6 +1357,7 @@ function AddMonitor(props: AddMonitorProps) {
             connectors,
             hdr: HDR,
             speakers,
+            touchscreen,
             pivot,
             additionalInfo,
             extraFeatures,
@@ -1373,6 +1381,7 @@ function AddMonitor(props: AddMonitorProps) {
             connectors,
             HDR,
             speakers,
+            touchscreen,
             pivot,
             additionalInfo,
             extraFeatures,
@@ -1750,7 +1759,8 @@ function AddMonitor(props: AddMonitorProps) {
             showTN,
             formattedString,
             extraFeatures,
-            speakers
+            speakers,
+            touchscreen
         ));
         setValue("descriptionCZ", monitorTemplateCZ(
             producent,
@@ -1773,7 +1783,8 @@ function AddMonitor(props: AddMonitorProps) {
             showTN,
             formattedString,
             extraFeaturesCZ || extraFeatures,
-            speakers
+            speakers,
+            touchscreen
         ));
         setValue("descriptionSK", monitorTemplateSK(
             producent,
@@ -1796,7 +1807,8 @@ function AddMonitor(props: AddMonitorProps) {
             showTN,
             formattedString,
             extraFeaturesSK || extraFeatures,
-            speakers
+            speakers,
+            touchscreen
         ));
     }, [producent,
         name,
@@ -1815,6 +1827,7 @@ function AddMonitor(props: AddMonitorProps) {
         connectors,
         HDR,
         speakers,
+        touchscreen,
         pivot,
         additionalInfo,
         additionalInfoCZ,
@@ -1906,7 +1919,7 @@ function AddMonitor(props: AddMonitorProps) {
                                 ) : null}
                             </Box>
                             <h2>Dodaj monitor</h2>
-                            <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
+                            <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField label="Tytuł" type="text"{...register("name", {
                                 onBlur: async (e) => {
                                     const value = e.target.value;
@@ -2161,7 +2174,7 @@ function AddMonitor(props: AddMonitorProps) {
                                 </Button>
                             </Box>
 
-                            <Button variant="outlined" type="reset"  >Reset formularza</Button>
+                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct || addingAllegroOffer} />
                             <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
                             </ApiloSubmitControls>

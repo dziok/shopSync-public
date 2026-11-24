@@ -157,6 +157,11 @@ test('monitor Shoper specifications list speakers only when selected', async () 
         };
         assert.ok(!specificationItems(without).includes(labels[index]), path);
         assert.equal(specificationItems(withSpeakers).filter((item) => item === labels[index]).length, 1, path);
+        const touchLabel = ['Ekran dotykowy: tak', 'Dotyková obrazovka: ano', 'Dotyková obrazovka: áno'][index];
+        assert.ok(!specificationItems(withSpeakers).includes(touchLabel), path);
+        const touchOnly = new JSDOM(template(...args, '', false, true)).window.document;
+        assert.ok(specificationItems(touchOnly).includes(touchLabel), path);
+        assert.ok(!specificationItems(touchOnly).includes(labels[index]), path);
     }
 });
 
@@ -168,9 +173,11 @@ test('Allegro monitor specification lists built-in speakers only when selected',
     ].map((key) => [key, '']));
     input.frame = false;
     input.design = false;
-    const specification = (speakers) => buildMonitorAllegroDescription({ ...input, speakers })
+    const specification = (speakers, touchscreen = false) => buildMonitorAllegroDescription({ ...input, speakers, touchscreen })
         .description.sections.find((section) => section.id === 'monitor-specification')
         ?.items.find((item) => item.type === 'TEXT')?.content ?? '';
     assert.ok(!specification(false).includes('Głośniki'));
     assert.match(specification(true), /Głośniki: wbudowane/);
+    assert.ok(!specification(true).includes('Ekran dotykowy'));
+    assert.match(specification(false, true), /Ekran dotykowy: tak/);
 });

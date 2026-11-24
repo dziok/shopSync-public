@@ -44,6 +44,8 @@
   margin: 10px;
   min-height: 39px;
   padding: 0 5px 0 12px;
+  color: inherit;
+  cursor: pointer;
 }
 
 .apilo-token-status--valid {
@@ -68,16 +70,8 @@
   white-space: nowrap;
 }
 
-.apilo-token-status__refresh {
-  background: #282828;
-  border: 1px solid #4c4c4c;
-  color: #f0f0f0;
-  font-size: 0.78rem;
-  margin: 4px 0 4px 3px;
-  padding: 5px 8px;
-}
-
-.apilo-token-status__refresh:hover {
+.apilo-token-status:hover,
+.apilo-token-status:focus-visible {
   border-color: var(--status-color);
 }
 

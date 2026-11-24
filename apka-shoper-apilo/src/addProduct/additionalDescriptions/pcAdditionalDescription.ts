@@ -1,4 +1,7 @@
 export const cpuTypesDescriptions = {
+    'Intel Core Ultra 5': "Intel Core Ultra 5 sprawdzi się w codziennej pracy z dokumentami, podczas wideokonferencji i przy korzystaniu z kilku aplikacji jednocześnie.",
+    'Intel Core Ultra 7': "Intel Core Ultra 7 to propozycja do pracy z rozbudowanymi arkuszami, obróbki zdjęć i uruchamiania kilku wymagających programów jednocześnie.",
+    'Intel Core Ultra 9': "Intel Core Ultra 9 to seria dla użytkowników wykonujących zadania intensywnie obciążające procesor, takie jak kompilacja dużych projektów czy renderowanie obrazu.",
     'Intel Core i3': "Procesory Intel Core i3 to świetny wybór dla codziennych zastosowań, takich jak przeglądanie internetu, praca biurowa i multimedia. Oferują dobrą wydajność w przystępnej cenie, zapewniając płynne działanie podstawowych aplikacji. Dzięki nowoczesnym technologiom zużywają niewiele energii, co przekłada się na dłuższą żywotność baterii w laptopach. Idealne dla użytkowników, którzy potrzebują solidnego komputera do prostych zadań.",
     'Intel Core i5': "Procesory Intel Core i5 to doskonały balans między wydajnością a ceną, sprawdzający się zarówno w pracy, jak i w grach. Wyposażone w większą liczbę rdzeni i wyższe taktowanie niż i3, radzą sobie z bardziej wymagającymi zadaniami, takimi jak edycja zdjęć czy multitasking. Technologia Turbo Boost automatycznie podnosi wydajność w razie potrzeby. To idealny wybór dla osób, które potrzebują mocniejszego sprzętu do codziennego użytku.",
     'Intel Core i7': "Procesory Intel Core i7 zapewniają wysoką wydajność w grach, pracy kreatywnej i profesjonalnych zastosowaniach. Dzięki większej liczbie rdzeni i wątków świetnie sprawdzają się w edycji wideo, projektowaniu 3D czy programowaniu. Obsługują zaawansowane technologie poprawiające szybkość działania i energooszczędność. To doskonała opcja dla wymagających użytkowników, którzy potrzebują mocy do pracy i rozrywki.",
@@ -21,6 +24,9 @@ export const cpuTypesDescriptions = {
     'AMD GX': "Procesory AMD GX to energooszczędne jednostki stosowane głównie w komputerach kompaktowych, terminalach, urządzeniach biurowych i systemach przemysłowych. Zapewniają stabilną pracę przy podstawowych zadaniach, takich jak obsługa internetu, aplikacji biurowych i prostych programów użytkowych. Dzięki niskiemu poborowi energii dobrze sprawdzają się w sprzęcie przeznaczonym do długiej i niezawodnej pracy. To praktyczne rozwiązanie do zastosowań biurowych, terminalowych i codziennych."
 }
 export const cpuTypesDescriptionsCZ = {
+    'Intel Core Ultra 5': "Intel Core Ultra 5 se hodí pro každodenní práci s dokumenty, videohovory a používání několika aplikací současně.",
+    'Intel Core Ultra 7': "Intel Core Ultra 7 je vhodný pro práci s rozsáhlými tabulkami, úpravy fotografií a souběžný běh náročnějších programů.",
+    'Intel Core Ultra 9': "Intel Core Ultra 9 je řada určená pro úlohy s vysokými nároky na procesor, například kompilaci velkých projektů nebo vykreslování obrazu.",
     'Intel Core i3': "Procesory Intel Core i3 jsou skvělou volbou pro každodenní použití, jako je prohlížení internetu, kancelářská práce a multimédia. Nabízejí dobrý výkon za přijatelnou cenu a zajišťují plynulý chod základních aplikací. Díky moderním technologiím mají nízkou spotřebu energie, což prodlužuje výdrž baterie u notebooků. Ideální pro uživatele, kteří potřebují spolehlivý počítač pro jednoduché úkoly.",
     'Intel Core i5': "Procesory Intel Core i5 představují výborný kompromis mezi výkonem a cenou, vhodné jak pro práci, tak pro hraní her. Díky vyššímu počtu jader a vyšším taktům než i3 zvládají náročnější úkoly, jako je úprava fotografií nebo multitasking. Technologie Turbo Boost automaticky zvyšuje výkon podle potřeby. Ideální volba pro uživatele hledající výkonnější zařízení pro každodenní použití.",
     'Intel Core i7': "Procesory Intel Core i7 nabízejí vysoký výkon pro hraní her, kreativní práci a profesionální použití. Díky většímu počtu jader a vláken se skvěle hodí pro úpravu videí, 3D návrhy nebo programování. Podporují pokročilé technologie pro zvýšení rychlosti a úsporu energie. Skvělá volba pro náročné uživatele, kteří požadují sílu pro práci i zábavu.",
@@ -43,6 +49,9 @@ export const cpuTypesDescriptionsCZ = {
     'AMD GX': "Procesory AMD GX jsou úsporné jednotky používané především v kompaktních počítačích, terminálech, kancelářských zařízeních a průmyslových systémech. Zajišťují stabilní provoz při základních úlohách, jako je práce s internetem, kancelářskými aplikacemi a jednoduchými programy. Díky nízké spotřebě energie se dobře hodí pro zařízení určená k dlouhodobému a spolehlivému provozu. Jde o praktické řešení pro kancelářské, terminálové a každodenní použití."
 }
 export const cpuTypesDescriptionsSK = {
+    'Intel Core Ultra 5': "Intel Core Ultra 5 sa hodí na každodennú prácu s dokumentmi, videohovory a používanie viacerých aplikácií súčasne.",
+    'Intel Core Ultra 7': "Intel Core Ultra 7 je vhodný na prácu s rozsiahlymi tabuľkami, úpravu fotografií a súbežný beh náročnejších programov.",
+    'Intel Core Ultra 9': "Intel Core Ultra 9 je séria určená na úlohy s vysokými nárokmi na procesor, napríklad kompiláciu veľkých projektov alebo vykresľovanie obrazu.",
     'Intel Core i3': "Procesory Intel Core i3 sú skvelou voľbou na každodenné použitie, ako je prehliadanie internetu, kancelárska práca a multimédiá. Ponúkajú dobrý výkon za dostupnú cenu a zabezpečujú plynulý chod základných aplikácií. Vďaka moderným technológiám majú nízku spotrebu energie, čo predlžuje výdrž batérie v notebookoch. Ideálne pre používateľov, ktorí potrebujú spoľahlivý počítač na jednoduché úlohy.",
     'Intel Core i5': "Procesory Intel Core i5 predstavujú výborný kompromis medzi výkonom a cenou, vhodné na prácu aj hranie hier. Majú viac jadier a vyššie frekvencie ako i3, vďaka čomu si poradia aj s náročnejšími úlohami, ako je úprava fotografií alebo multitasking. Technológia Turbo Boost automaticky zvyšuje výkon podľa potreby. Ideálna voľba pre tých, ktorí potrebujú výkonnejšie zariadenie na každodenné použitie.",
     'Intel Core i7': "Procesory Intel Core i7 poskytujú vysoký výkon pri hraní hier, kreatívnej práci a profesionálnych aplikáciách. Vďaka väčšiemu počtu jadier a vlákien sú výborné na úpravu videa, 3D návrh alebo programovanie. Podporujú pokročilé technológie zvyšujúce rýchlosť a energetickú efektivitu. Skvelá voľba pre náročných používateľov, ktorí potrebujú výkon na prácu aj zábavu.",
@@ -114,6 +123,9 @@ export const ramTypesDescriptionsSK = {
 }
 
 export const diskTypesDescriptions = {
+    'EMMC + SSD': "Komputer ma wbudowaną pamięć eMMC i dodatkowy dysk SSD. Pliki i aplikacje można rozdzielić między dwa nośniki.",
+    'EMMC + SSD (m2)': "Wbudowaną pamięć eMMC uzupełnia dysk SSD w formacie M.2. Na osobnym nośniku można przechowywać aplikacje lub dokumenty.",
+    'EMMC + M.2 NVME': "Oprócz wbudowanej pamięci eMMC komputer ma dysk SSD M.2 z interfejsem NVMe. Dysk NVMe sprawdzi się przy pracy z dużymi plikami.",
     'M.2': "Dysk M.2 SATA to kompaktowe rozwiązanie dla użytkowników, którzy chcą zwiększyć szybkość działania swojego komputera bez rezygnacji z kompatybilności. Oferuje wyraźnie lepszą wydajność niż tradycyjne dyski HDD, jednocześnie zachowując przystępną cenę. Dzięki niewielkim rozmiarom idealnie sprawdzi się w laptopach i komputerach stacjonarnych z gniazdem M.2. To dobry wybór dla osób, które szukają szybszego i bardziej energooszczędnego nośnika danych.",
     'M.2 NVME': "Dysk M.2 NVMe to najszybsze dostępne rozwiązanie dla wymagających użytkowników. Dzięki technologii NVMe oferuje błyskawiczny odczyt i zapis danych, co znacząco przyspiesza uruchamianie systemu oraz ładowanie programów i gier. Jest idealnym wyborem dla profesjonalistów, graczy i twórców, którzy potrzebują maksymalnej wydajności. Kompaktowy format sprawia, że świetnie nadaje się do nowoczesnych laptopów i komputerów stacjonarnych.",
     'HDD': "Tradycyjny dysk twardy HDD to sprawdzone rozwiązanie do przechowywania dużej ilości danych w przystępnej cenie. Choć jest wolniejszy od nowoczesnych nośników SSD, nadal dobrze sprawdza się jako magazyn plików, zdjęć i filmów. Jest idealnym wyborem dla użytkowników, którzy potrzebują dużej pojemności w rozsądnej cenie. To solidne i niezawodne rozwiązanie do archiwizacji danych.",
@@ -127,6 +139,9 @@ export const diskTypesDescriptions = {
     'Pamięć wlutowana EMMC': "Wlutowana pamięć eMMC to kompaktowe i energooszczędne rozwiązanie stosowane w laptopach, tabletach oraz urządzeniach mobilnych. Zapewnia stabilną wydajność w codziennych zastosowaniach, takich jak przeglądanie internetu, multimedia i praca biurowa. Choć nie dorównuje szybkością dyskom SSD, oferuje dobrą równowagę między kosztami a funkcjonalnością. To praktyczna opcja dla użytkowników poszukujących niezawodnej pamięci wbudowanej w urządzenie."
 }
 export const diskTypesDescriptionsSK = {
+    'EMMC + SSD': "Počítač má vstavanú pamäť eMMC a ďalší disk SSD. Súbory a aplikácie možno rozdeliť medzi dve úložiská.",
+    'EMMC + SSD (m2)': "Vstavanú pamäť eMMC dopĺňa disk SSD vo formáte M.2. Na samostatný disk možno ukladať aplikácie alebo dokumenty.",
+    'EMMC + M.2 NVME': "Okrem vstavanej pamäte eMMC má počítač disk SSD M.2 s rozhraním NVMe. Disk NVMe je vhodný na prácu s veľkými súbormi.",
     'M.2': "Disk M.2 SATA je kompaktné riešenie pre používateľov, ktorí chcú zvýšiť rýchlosť svojho počítača bez straty kompatibility. Ponúka výrazne lepší výkon ako tradičné HDD a zachováva prijateľnú cenu.",
     'M.2 NVME': "Disk M.2 NVMe je najrýchlejšie dostupné riešenie pre náročných používateľov. Vďaka technológii NVMe ponúka bleskové čítanie a zápis dát, čo výrazne zrýchľuje spúšťanie systému a načítanie programov a hier.",
     'HDD': "Tradičný pevný disk HDD je osvedčené riešenie pre ukladanie veľkého množstva dát za prijateľnú cenu. Aj keď je pomalší ako moderné SSD, stále dobre slúži ako úložisko pre súbory, fotografie a filmy.",
@@ -142,6 +157,9 @@ export const diskTypesDescriptionsSK = {
     'Pamięć wlutowana EMMC': "Spájkovaná pamäť eMMC je kompaktné a energeticky úsporné riešenie používané v notebookoch, tabletoch a mobilných zariadeniach. Poskytuje stabilný výkon pre každodenné úlohy, ako je prehliadanie internetu, multimédiá a kancelárska práca.",
 }
 export const diskTypesDescriptionsCZ = {
+    'EMMC + SSD': "Počítač má vestavěnou paměť eMMC a další disk SSD. Soubory a aplikace lze rozdělit mezi dvě úložiště.",
+    'EMMC + SSD (m2)': "Vestavěnou paměť eMMC doplňuje disk SSD ve formátu M.2. Na samostatný disk lze ukládat aplikace nebo dokumenty.",
+    'EMMC + M.2 NVME': "Kromě vestavěné paměti eMMC má počítač disk SSD M.2 s rozhraním NVMe. Disk NVMe je vhodný pro práci s velkými soubory.",
     'M.2': "Disk M.2 SATA je kompaktní řešení pro uživatele, kteří chtějí zvýšit rychlost svého počítače bez ztráty kompatibility. Nabízí výrazně lepší výkon než tradiční HDD a zachovává přijatelnou cenu.",
     'M.2 NVME': "Disk M.2 NVMe je nejrychlejší dostupné řešení pro náročné uživatele. Díky technologii NVMe nabízí bleskový čtení a zápis dat, což výrazně zrychluje spouštění systému a načítání programů a her.",
     'HDD': "Tradiční pevný disk HDD je osvědčené řešení pro ukládání velkého množství dat za přijatelnou cenu. I když je pomalejší než moderní SSD, stále dobře slouží jako úložiště pro soubory, fotografie a filmy.",

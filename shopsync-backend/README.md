@@ -45,12 +45,22 @@ Autoryzacja Apilo wymaga następujących zmiennych:
 - `APILO_CLIENT_SECRET`
 - `APILO_AUTHORIZATION_CODE`
 
-Kod autoryzacyjny jest używany tylko przy pierwszym uruchomieniu. Otrzymana
+Kod autoryzacyjny jest używany przy pierwszym uruchomieniu lub gdy zapisany
+refresh token zostanie odrzucony. Otrzymana
 para access/refresh tokenów jest zapisywana domyślnie w prywatnym pliku
 `shopsync-backend/.data/apilo-tokens.json`. Plik jest ignorowany przez Git.
 Ścieżkę można zmienić przez `APILO_TOKEN_FILE`.
 
 Backend sprawdza ważność tokenu podczas logowania oraz cyklicznie co 6 godzin.
+Nieudane odnowienie tokenu Apilo nie blokuje logowania do aplikacji, ale funkcje
+Apilo pozostają niedostępne do czasu ponownej autoryzacji. W aplikacji kliknij
+status Apilo, aby odświeżyć token lub połączyć konto nowym kodem. Gdy zmieniono
+aplikację API w Apilo, podaj tam również nowe ID i sekret klienta. Po udanej
+autoryzacji bieżąca sesja jest aktualizowana bez ponownego logowania. Sekret i
+tokeny są zapisywane w pliku backendu z uprawnieniami `0600`, nigdy w localStorage.
+Token Apilo nie jest już umieszczany w JWT stanowiska. Każde żądanie do Apilo
+pobiera aktualny token z serwisu backendu, więc ponowna autoryzacja na jednym
+stanowisku działa także dla pozostałych stanowisk korzystających z tego backendu.
 Po poprawnej inicjalizacji `APILO_ACCESS_TOKEN` nie jest potrzebny.
 Jeśli `APILO_AUTH_URL` nie jest ustawiony, backend automatycznie wylicza
 endpoint `/rest/auth/token/` z hosta `APILO_BASE_URL`.

@@ -29,7 +29,7 @@ interface Param {
 interface Props {
     Parameters: Param[];
     formData: Record<string, any>;
-    register: any;
+    register?: any;
     handleChangeAllegro: (paramName: string, value: any) => void;
     isParamDisabled: (paramName: string) => boolean;
 }
@@ -130,7 +130,7 @@ function ParamField({
 }: {
     param: ParamWithIndex;
     formData: Record<string, any>;
-    register: any;
+    register?: any;
     handleChangeAllegro: (paramName: string, value: any) => void;
     isParamDisabled: (paramName: string) => boolean;
 }) {
@@ -144,7 +144,7 @@ function ParamField({
                 <FormControl fullWidth required={param.required} disabled={disabled} sx={{ width: 'inherit' }}>
                     <InputLabel>{param.name}</InputLabel>
                     <Select
-                        {...register(`attribute_${param.__index}`)}
+                        {...register?.(`attribute_${param.__index}`)}
                         multiple={isMulti}
                         value={
                             isMulti

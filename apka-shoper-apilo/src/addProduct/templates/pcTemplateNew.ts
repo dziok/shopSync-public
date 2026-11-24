@@ -125,7 +125,7 @@ export const pcTemplateNew = (
                                         <dt>Typ matrycy</dt><dd>${matrixType}</dd>
                                         <dt>Stan matrycy</dt><dd>${grade} (${gradeDescription})</dd>
                                         <dt>Rozmiar ekranu</dt><dd>${matrixSize}</dd>
-                                        <dt>Częstotliwość odświerzania ekranu</dt><dd>${Frequency}</dd>
+                                        <dt>Częstotliwość odświeżania ekranu</dt><dd>${Frequency}</dd>
                                         <dt>Ekran dotykowy</dt><dd>${touchScreen}</dd>
                                         <dt>Mikrofon</dt><dd>${microphone}</dd>
                                         <dt>Kamerka internetowa</dt><dd>${camera}</dd>               
@@ -499,7 +499,7 @@ export const PcApiloAioSpecyfication = (
 <ul> <li> Rozdzielczość: <b>${resolution}</b></li>
 <li> Typ matrycy: <b>${matrixType} </b></li>
 <li> Rozmiar ekranu: <b>${matrixSize} </b></li>
-<li> Częstotliwość odświerzania ekranu: <b>${Frequency} </b></li>
+<li> Częstotliwość odświeżania ekranu: <b>${Frequency} </b></li>
 <li> Ekran dotykowy: <b>${touchScreen ? "Tak" : "Nie"}</b></li>
 <li> Mikrofon: <b>${microphone ? "Tak" : "Nie"}</b></li>
 <li> Kamerka internetowa: <b>${camera ? "Tak" : "Nie"}</b></li>

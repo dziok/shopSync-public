@@ -81,6 +81,7 @@ type MonthlyComputerAssignment = {
         assignedAt: string;
     }>;
 };
+type SchedulePreviewDay = { date: string; targetStatusIds: number[] };
 
 const ROTATION_DAYS: { key: RotationDayKey; label: string }[] = [
     { key: "monday", label: "Poniedziałek" },
@@ -402,6 +403,9 @@ type LineProps = {
     setMonthlyTargetScheduleMode?: (statusId: number, mode: MonthlyComputerTargetScheduleMode) => void;
     setMonthlyAlternateAnchorDate?: (date: string) => void;
     setMonthlyMondayAllActive?: (enabled: boolean) => void;
+    schedulePreview?: SchedulePreviewDay[] | null;
+    schedulePreviewLoading?: boolean;
+    schedulePreviewError?: string;
 };
 
 const isPlainObject = (v: any) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -541,6 +545,9 @@ const LineCard: React.FC<LineProps> = ({
     setMonthlyTargetScheduleMode,
     setMonthlyAlternateAnchorDate,
     setMonthlyMondayAllActive,
+    schedulePreview,
+    schedulePreviewLoading,
+    schedulePreviewError,
 
 }) => {
     const disabled = !active;
@@ -1032,6 +1039,36 @@ const LineCard: React.FC<LineProps> = ({
 
                                 <Divider sx={{ my: 1.5 }} />
 
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                    Harmonogram na najbliższe 14 dni
+                                </Typography>
+                                {schedulePreviewLoading && <CircularProgress size={18} aria-label="Ładowanie harmonogramu" />}
+                                {schedulePreviewError && <Typography color="error" variant="body2">{schedulePreviewError}</Typography>}
+                                {schedulePreview && !schedulePreviewLoading && (
+                                    <Table size="small" aria-label="Harmonogram przydziału linii 1">
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell sx={{ fontWeight: 700 }}>Dzień</TableCell>
+                                                <TableCell sx={{ fontWeight: 700 }}>Osoby mogące otrzymać zamówienia</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {schedulePreview.map(({ date, targetStatusIds }) => (
+                                                <TableRow key={date}>
+                                                    <TableCell sx={{ whiteSpace: "nowrap", verticalAlign: "top" }}>
+                                                        {new Intl.DateTimeFormat("pl-PL", { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`))}
+                                                    </TableCell>
+                                                    <TableCell>{targetStatusIds.length
+                                                        ? targetStatusIds.map((id) => targetNames[id] || `Status ${id}`).join(", ")
+                                                        : "Nikt"}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+
+                                <Divider sx={{ my: 1.5 }} />
+
                                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }} justifyContent="space-between">
                                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                         Zestawienie miesięczne
@@ -1331,6 +1368,9 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
         [line2Names, line2TargetLimits, line2TargetStatusIds],
     );
     const [serverSnapshot, setServerSnapshot] = useState<any | null>(null);
+    const [line1Preview, setLine1Preview] = useState<SchedulePreviewDay[] | null>(null);
+    const [line1PreviewLoading, setLine1PreviewLoading] = useState(false);
+    const [line1PreviewError, setLine1PreviewError] = useState("");
     const [serverRevision, setServerRevision] = useState<number | null>(null);
 
     const touchLine1RotationAnchor = () => {
@@ -1560,6 +1600,51 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
             },
         },
     });
+
+    const line1PreviewKey = JSON.stringify({
+        active: line1Active,
+        targetStatusIds: line1TargetStatusIds,
+        autoSchedule: { enabled: line1SchedEnabled, enableAt: line1EnableAt, disableAt: line1DisableAt, timezone: "Europe/Warsaw", weekendOnly: line1WeekendOnly },
+        tabRotation: {
+            enabled: line1RotationEnabled,
+            timezone: "Europe/Warsaw",
+            order: line1TargetsAll.filter((id) => line1TargetStatusIds.includes(id)),
+            participantIds: line1RotationParticipants,
+            cycleAnchorDate: line1RotationCycleAnchorDate,
+            days: line1RotationDays,
+        },
+        monthlyComputerAssignment: {
+            timezone: line1MonthlyComputerAssignment.timezone,
+            alternateAnchorDate: line1MonthlyComputerAssignment.alternateAnchorDate,
+            mondayAllActive: line1MonthlyComputerAssignment.mondayAllActive,
+            targetSchedules: line1MonthlyComputerAssignment.targetSchedules,
+            weekdayTargets: line1MonthlyComputerAssignment.weekdayTargets,
+        },
+    });
+
+    useEffect(() => {
+        if (!authToken || !serverSnapshot) return;
+        const controller = new AbortController();
+        setLine1Preview(null);
+        setLine1PreviewLoading(true);
+        setLine1PreviewError("");
+        const timer = window.setTimeout(() => {
+            axios.post<SchedulePreviewDay[]>(`${API_URL}/apilo-orders/line1-schedule-preview`, JSON.parse(line1PreviewKey), {
+                headers: { Authorization: `Bearer ${authToken}` },
+                signal: controller.signal,
+            }).then(({ data }) => setLine1Preview(data))
+                .catch((error) => {
+                    if (!controller.signal.aborted) setLine1PreviewError(getApiErrorMessage(error, "Nie udało się pobrać harmonogramu."));
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted) setLine1PreviewLoading(false);
+                });
+        }, 250);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [authToken, serverSnapshot, line1PreviewKey]);
 
 
     const saveSettings = async () => {
@@ -1942,6 +2027,9 @@ const ApiloOrdersPanel: React.FC<OrdersPanelProps> = ({ authToken }) => {
                             setMonthlyTargetScheduleMode={setLine1MonthlyTargetScheduleMode}
                             setMonthlyAlternateAnchorDate={setLine1MonthlyAlternateAnchorDate}
                             setMonthlyMondayAllActive={setLine1MonthlyMondayAllActive}
+                            schedulePreview={line1Preview}
+                            schedulePreviewLoading={line1PreviewLoading}
+                            schedulePreviewError={line1PreviewError}
                         />
                     </Grid>
 

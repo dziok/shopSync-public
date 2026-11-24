@@ -80,6 +80,8 @@ describe("ApiloTokenService", () => {
     expect(savedState).toEqual({
       ...tokenResponse,
       updatedAt: expect.any(String),
+      clientId: "client-id",
+      clientSecret: "client-secret",
     });
   });
 
@@ -159,6 +161,110 @@ describe("ApiloTokenService", () => {
       refreshTokenExpireAt: tokenState.refreshTokenExpireAt,
       automaticRefresh: true,
       lastRefreshedAt: tokenState.updatedAt,
+      credentialsConfigured: false,
     });
+  });
+
+  it("connects with new credentials even when an old refresh token remains unexpired", async () => {
+    const oldState = {
+      accessToken: "expired-access-token",
+      accessTokenExpireAt: "2020-01-01T00:00:00Z",
+      refreshToken: "old-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+    };
+    await writeFile(tokenFile, JSON.stringify(oldState), "utf8");
+    const newState = {
+      accessToken: "new-access-token",
+      accessTokenExpireAt: "2099-01-01T00:00:00Z",
+      refreshToken: "new-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+    };
+    const post = jest.fn().mockResolvedValue({ data: newState });
+    const { service } = createService({
+      apiloTokenFile: tokenFile,
+      apiloAuthUrl: "https://example.apilo.com/rest/auth/token/",
+    }, post);
+
+    await expect(service.connect({ authorizationCode: "new-code", clientId: "new-id", clientSecret: "new-secret" })).resolves.toBe("new-access-token");
+    expect(post).toHaveBeenCalledWith(expect.any(String), {
+      grantType: "authorization_code",
+      token: "new-code",
+    }, expect.objectContaining({ auth: { username: "new-id", password: "new-secret" } }));
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual({
+      ...newState,
+      updatedAt: expect.any(String),
+      clientId: "new-id",
+      clientSecret: "new-secret",
+    });
+  });
+
+  it("keeps saved tokens and credentials when connecting fails", async () => {
+    const oldState = {
+      accessToken: "old-access-token",
+      accessTokenExpireAt: "2099-01-01T00:00:00Z",
+      refreshToken: "old-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+      clientId: "old-id",
+      clientSecret: "old-secret",
+    };
+    await writeFile(tokenFile, JSON.stringify(oldState), "utf8");
+    const post = jest.fn().mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
+    const { service } = createService({
+      apiloTokenFile: tokenFile,
+      apiloAuthUrl: "https://example.apilo.com/rest/auth/token/",
+    }, post);
+
+    await expect(service.connect({ authorizationCode: "wrong", clientId: "new-id", clientSecret: "new-secret" })).rejects.toThrow();
+    expect(JSON.parse(await readFile(tokenFile, "utf8"))).toEqual(oldState);
+  });
+
+  it("refreshes with credentials saved by the connection", async () => {
+    const oldState = {
+      accessToken: "old-access-token",
+      accessTokenExpireAt: "2099-01-01T00:00:00Z",
+      refreshToken: "old-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+      clientId: "saved-id",
+      clientSecret: "saved-secret",
+    };
+    await writeFile(tokenFile, JSON.stringify(oldState), "utf8");
+    const post = jest.fn().mockResolvedValue({ data: { ...oldState, accessToken: "fresh-access-token" } });
+    const { service } = createService({ apiloTokenFile: tokenFile, apiloAuthUrl: "https://example.apilo.com/rest/auth/token/" }, post);
+
+    await expect(service.refreshAccessToken()).resolves.toBe("fresh-access-token");
+    expect(post).toHaveBeenCalledWith(expect.any(String), {
+      grantType: "refresh_token", token: "old-refresh-token",
+    }, expect.objectContaining({ auth: { username: "saved-id", password: "saved-secret" } }));
+  });
+
+  it("tries a new configured authorization code when the saved refresh token is rejected", async () => {
+    await writeFile(tokenFile, JSON.stringify({
+      accessToken: "expired-access-token",
+      accessTokenExpireAt: "2020-01-01T00:00:00Z",
+      refreshToken: "rejected-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+    }), "utf8");
+    const response = {
+      accessToken: "new-access-token",
+      accessTokenExpireAt: "2099-01-01T00:00:00Z",
+      refreshToken: "new-refresh-token",
+      refreshTokenExpireAt: "2099-03-01T00:00:00Z",
+    };
+    const post = jest.fn()
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+      .mockResolvedValueOnce({ data: response });
+    const { service } = createService({
+      apiloTokenFile: tokenFile,
+      apiloAuthUrl: "https://example.apilo.com/rest/auth/token/",
+      apiloClientId: "new-id",
+      apiloClientSecret: "new-secret",
+      apiloAuthorizationCode: "new-code",
+    }, post);
+
+    await expect(service.getAccessToken()).resolves.toBe("new-access-token");
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(2, expect.any(String), {
+      grantType: "authorization_code", token: "new-code",
+    }, expect.objectContaining({ auth: { username: "new-id", password: "new-secret" } }));
   });
 });

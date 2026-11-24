@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller, type Path, type PathValue } from "react-hook-form"
 import { useEffect, useRef, useState } from "react";
@@ -73,7 +75,7 @@ interface IFormInput {
 }
 let deviceType = ""
 function AddPhoneIOS(props: AddphoneIOSProps) {
-    const { register, handleSubmit, watch, setValue, getValues, reset, control } = useForm<IFormInput>()
+    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, getValues, reset, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, setSelectedImages, imageLinks, setImageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
@@ -101,6 +103,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
         ...(offerGroups?.categoryId === Number(categoryId) ? offerGroups.ids : []),
     ], manualAttributeGroupId);
     const phoneAttributes = usePhoneShoperAttributes(API_URL, props.authToken, groupIds);
+    const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, phoneAttributes.attributes);
     let apiloImageUUIDs: string[] = [];
 
     useEffect(() => { setManualAttributeGroupId(""); }, [categoryId]);
@@ -634,7 +637,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                                     {loadingShoperOffer ? "Pobieranie..." : "Pobierz"}
                                 </Button>
                             </Box>
-                            <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
+                            <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
                             <TextField label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
                             <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
@@ -642,7 +645,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                             <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="model" label="Model" />
                             <FormControl fullWidth >
                                 <InputLabel>Kategoria</InputLabel>
-                                <Select {...register("category")} label="kategoria">
+                                <Select {...register("category")} value={categoryId ?? ""} label="kategoria">
                                     <MenuItem value="314">iPhone</MenuItem>
                                     <MenuItem value="331">iPad</MenuItem>
                                 </Select>
@@ -792,7 +795,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
 
                             <ProductImageManager {...images} />
 
-                            <Button variant="outlined" type="reset"  >Reset formularza</Button>
+                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
                             <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
                             </ApiloSubmitControls>

@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import { useState, useEffect } from "react";
@@ -93,7 +95,7 @@ interface Attribute {
 function AddCustomProduct(props: AddProductProps) {
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
-    const { register, handleSubmit, setValue, control } = useForm<IFormInput>();
+    const { register, handleSubmit, getFieldState, setValue, control, watch } = useForm<IFormInput>();
     const [descriptionValue, setDescriptionValue] = useState<string>('');
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
@@ -101,6 +103,7 @@ function AddCustomProduct(props: AddProductProps) {
     const [editorState, setEditorState] = useState(EditorState.createEmpty());
     const [categories, setCategories] = useState<CategoryResource[]>([]);
     const [producers, setProducers] = useState<ProducersResource[]>([]);
+    const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, attributeList, producers);
     const [productSafetyProducers, setProductSafetyProducers] = useState<ProductSafetyProducerResource[]>([]);
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [relatedPackId, setRelatedPackId] = useState("");
@@ -537,7 +540,7 @@ function AddCustomProduct(props: AddProductProps) {
                 <Box sx={{ py: 2, display: "grid", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
                     <ThemeProvider theme={MainTheme}>
                         <h2>Dodaj produkt</h2>
-                        <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="aktywność" />
+                        <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
                         <TextField label="Tytuł" type="text"{...register("name", {
                             onBlur: async (e) => {
                                 const value = e.target.value;
@@ -567,6 +570,7 @@ function AddCustomProduct(props: AddProductProps) {
 
                         <Autocomplete
                             options={producers}
+                            value={producers.find(p => Number(p.producer_id) === Number(watch("producer"))) ?? null}
                             getOptionLabel={(option) => option?.name ?? ""}
                             isOptionEqualToValue={(option, value) => option.producer_id === value.producer_id}
                             renderOption={(props, option, index) => (
@@ -762,6 +766,7 @@ function AddCustomProduct(props: AddProductProps) {
                         </ApiloSubmitControls>
                     </ThemeProvider>
                 </Box>
+                <TemplateResetButton disabled={loading || images.uploadingImages} />
             </form>
             <div className="preview">
                 <div style={{ backgroundColor: 'white', color: 'black', lineHeight: "0.8", padding: '20px' }}>

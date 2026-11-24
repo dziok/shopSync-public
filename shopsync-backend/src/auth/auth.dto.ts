@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class LoginShoperDto {
   @IsString()
@@ -12,5 +12,19 @@ export class LoginShoperDto {
 
 export class JwtPayload {
   shoperToken: string;
-  apiloToken: string;
+  apiloToken?: string;
+}
+
+export class ConnectApiloDto {
+  @IsString()
+  @IsNotEmpty()
+  authorizationCode: string;
+
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
+  clientSecret?: string;
 }

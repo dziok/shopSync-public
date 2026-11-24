@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AuthService } from "./auth.service";
-import { LoginShoperDto } from "./auth.dto";
+import { ConnectApiloDto, JwtPayload, LoginShoperDto } from "./auth.dto";
 import { ApiloTokenService } from "./apilo-token.service";
 import { JwtAuthGuard } from "./auth.guard";
 
@@ -20,6 +20,20 @@ export class AuthController {
   @Get("apilo-token/status")
   getApiloTokenStatus() {
     return this.apiloTokenService.getStatus();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post("apilo-token/connect")
+  async connectApilo(@Body() dto: ConnectApiloDto, @Req() request: { user: JwtPayload }) {
+    await this.apiloTokenService.connect(dto);
+    return this.authService.createSession(request.user.shoperToken);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post("apilo-token/refresh")
+  async refreshApilo(@Req() request: { user: JwtPayload }) {
+    await this.apiloTokenService.refreshAccessToken();
+    return this.authService.createSession(request.user.shoperToken);
   }
 
   @Get("device-code")

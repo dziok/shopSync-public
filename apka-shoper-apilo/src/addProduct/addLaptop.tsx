@@ -1,3 +1,4 @@
+import { TemplateResetButton } from './TemplateResetButton';
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form"
 import { useEffect, useState } from "react";
@@ -117,7 +118,7 @@ interface ProducersResource {
 function AddLaptop(props: AddLaptopProps) {
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [portsListString, setPortsListString] = useState("");
-    const { register, handleSubmit, setValue, reset, watch, control } = useForm<IFormInput>();
+    const { formState: { isSubmitting }, register, handleSubmit, setValue, reset, watch, control } = useForm<IFormInput>();
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
@@ -1680,7 +1681,7 @@ function AddLaptop(props: AddLaptopProps) {
                             <textarea defaultValue={LaptopTemplateApilo('', '', '', '', '', '', '', '', '', false, true, '', '', '', '', true, false, false, '', '', '', '', '', '', '', '', '', '', '', '', '', '', false, '', false, false, false, false, false, false, false, false)}  {...register("descriptionApilo")} />
                             <ProductImageManager {...images} />
 
-                            <Button variant="outlined" onClick={() => reset()}>Reset formularza</Button>
+                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages} beforeReset={() => reset()} />
                             <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
                                 <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
                             </ApiloSubmitControls>

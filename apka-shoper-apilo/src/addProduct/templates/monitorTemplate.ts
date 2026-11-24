@@ -22,7 +22,8 @@ export const monitorTemplate = (
     showTn: string,
     portsLI: string,
     extraFeatures = "",
-    speakers = false
+    speakers = false,
+    touchscreen = false
 
 ) => renderConditionalDescription(`
  <div id="mainContainer" style="display: flex; align-items: center; flex-direction: column;">
@@ -62,6 +63,7 @@ export const monitorTemplate = (
                         <li>Złącza: ${ports}</li>
                         <li>HDR: ${HDR}</li>
                         ${speakers ? '<li>Głośniki: wbudowane</li>' : ''}
+                        ${touchscreen ? '<li>Ekran dotykowy: tak</li>' : ''}
                     </ul>
                 </div>
             </div>

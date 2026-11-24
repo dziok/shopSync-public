@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     validate(payload: JwtPayload): JwtPayload {
-        if (!(payload.apiloToken || payload.shoperToken)) {
+        if (!payload.shoperToken) {
             throw new UnauthorizedException('JWT is missing required parameters')
         }
 

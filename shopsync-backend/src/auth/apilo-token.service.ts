@@ -1,5 +1,6 @@
 import { HttpService } from "@nestjs/axios";
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -10,6 +11,7 @@ import axios from "axios";
 import { chmod, mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
 import { Config } from "../config/config";
+import { ConnectApiloDto } from "./auth.dto";
 
 const DEFAULT_MIN_VALIDITY_MS = 60 * 60 * 1000;
 const MAINTENANCE_MIN_VALIDITY_MS = 24 * 60 * 60 * 1000;
@@ -20,6 +22,8 @@ interface ApiloTokenState {
   refreshToken: string;
   refreshTokenExpireAt: string;
   updatedAt?: string;
+  clientId?: string;
+  clientSecret?: string;
 }
 
 interface ApiloTokenResponse {
@@ -35,6 +39,7 @@ export interface ApiloTokenStatus {
   refreshTokenExpireAt: string | null;
   automaticRefresh: boolean;
   lastRefreshedAt: string | null;
+  credentialsConfigured: boolean;
 }
 
 @Injectable()
@@ -53,25 +58,76 @@ export class ApiloTokenService {
     minValidityMs = DEFAULT_MIN_VALIDITY_MS,
   ): Promise<string> {
     if (!this.pendingTokenRequest) {
-      this.pendingTokenRequest = this.resolveAccessToken(minValidityMs).finally(
-        () => {
+      const tracked = this.resolveAccessToken(minValidityMs).finally(() => {
+        if (this.pendingTokenRequest === tracked) {
           this.pendingTokenRequest = undefined;
-        },
-      );
+        }
+      });
+      this.pendingTokenRequest = tracked;
     }
 
     return this.pendingTokenRequest;
+  }
+
+  async connect(dto: ConnectApiloDto): Promise<string> {
+    const authorizationCode = dto.authorizationCode?.trim();
+    const clientId = dto.clientId?.trim();
+    const clientSecret = dto.clientSecret?.trim();
+    if (!authorizationCode) {
+      throw new BadRequestException("Podaj kod autoryzacyjny Apilo.");
+    }
+    if (Boolean(clientId) !== Boolean(clientSecret)) {
+      throw new BadRequestException("Podaj zarówno ID klienta, jak i sekret klienta.");
+    }
+
+    return this.runExclusiveTokenRequest(async () => {
+      await this.loadTokenState();
+      return this.exchangeToken("authorization_code", authorizationCode, clientId && clientSecret
+        ? { clientId, clientSecret }
+        : undefined);
+    });
+  }
+
+  async refreshAccessToken(): Promise<string> {
+    return this.runExclusiveTokenRequest(async () => {
+      await this.loadTokenState();
+      if (!this.tokenState?.refreshToken || !this.isValidUntil(this.tokenState.refreshTokenExpireAt, 0)) {
+        throw new BadRequestException("Brak ważnego tokenu odświeżającego. Połącz Apilo nowym kodem autoryzacyjnym.");
+      }
+      return this.exchangeToken("refresh_token", this.tokenState.refreshToken);
+    });
+  }
+
+  private async runExclusiveTokenRequest(action: () => Promise<string>): Promise<string> {
+    const previous = this.pendingTokenRequest;
+    const request = (async () => {
+      if (previous) {
+        await previous.catch(() => undefined);
+      }
+      return action();
+    })();
+    const tracked = request.finally(() => {
+      if (this.pendingTokenRequest === tracked) {
+        this.pendingTokenRequest = undefined;
+      }
+    });
+    this.pendingTokenRequest = tracked;
+    return tracked;
   }
 
   async getStatus(): Promise<ApiloTokenStatus> {
     await this.loadTokenState();
 
     if (this.tokenState) {
-      return this.buildStatus(
+      return {
+        ...this.buildStatus(
         this.tokenState.accessTokenExpireAt,
         this.tokenState.refreshTokenExpireAt,
         this.tokenState.updatedAt,
-      );
+        ),
+        credentialsConfigured: Boolean(this.tokenState.clientId && this.tokenState.clientSecret)
+          || this.hasConfiguredCredentials(),
+      };
     }
 
     const configuredAccessToken =
@@ -89,6 +145,7 @@ export class ApiloTokenService {
         refreshTokenExpireAt: null,
         automaticRefresh: false,
         lastRefreshedAt: null,
+        credentialsConfigured: this.hasConfiguredCredentials(),
       };
     }
 
@@ -98,6 +155,7 @@ export class ApiloTokenService {
       refreshTokenExpireAt: null,
       automaticRefresh: false,
       lastRefreshedAt: null,
+      credentialsConfigured: this.hasConfiguredCredentials(),
     };
   }
 
@@ -126,14 +184,23 @@ export class ApiloTokenService {
       this.tokenState?.refreshToken &&
       this.isValidUntil(this.tokenState.refreshTokenExpireAt, 0)
     ) {
-      return this.exchangeToken("refresh_token", this.tokenState.refreshToken);
+      try {
+        return await this.exchangeToken("refresh_token", this.tokenState.refreshToken);
+      } catch (error) {
+        const authorizationCode = this.getOptionalConfigValue("apiloAuthorizationCode");
+        if (!authorizationCode || !(error instanceof BadRequestException)) {
+          throw error;
+        }
+        this.logger.warn("Saved Apilo refresh token was rejected; trying configured authorization code.");
+        return this.exchangeToken("authorization_code", authorizationCode, this.getEnvironmentCredentials());
+      }
     }
 
     const authorizationCode = this.getOptionalConfigValue(
       "apiloAuthorizationCode",
     );
     if (authorizationCode) {
-      return this.exchangeToken("authorization_code", authorizationCode);
+      return this.exchangeToken("authorization_code", authorizationCode, this.getEnvironmentCredentials());
     }
 
     const configuredAccessToken =
@@ -161,15 +228,9 @@ export class ApiloTokenService {
   private async exchangeToken(
     grantType: "authorization_code" | "refresh_token",
     token: string,
+    credentials?: { clientId: string; clientSecret: string },
   ): Promise<string> {
-    const clientId = this.getRequiredConfigValue(
-      "apiloClientId",
-      "APILO_CLIENT_ID",
-    );
-    const clientSecret = this.getRequiredConfigValue(
-      "apiloClientSecret",
-      "APILO_CLIENT_SECRET",
-    );
+    const activeCredentials = credentials ?? this.getSavedOrEnvironmentCredentials();
     const authUrl = this.getAuthUrl();
 
     let responseData: ApiloTokenResponse;
@@ -183,8 +244,8 @@ export class ApiloTokenService {
         },
         {
           auth: {
-            username: clientId,
-            password: clientSecret,
+            username: activeCredentials.clientId,
+            password: activeCredentials.clientSecret,
           },
           headers: {
             Accept: "application/json",
@@ -196,9 +257,12 @@ export class ApiloTokenService {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
-        throw new InternalServerErrorException(
-          `Apilo token request failed${status ? ` with HTTP ${status}` : ""}.`,
-        );
+        if (status === 401 || status === 403) {
+          throw new BadRequestException(grantType === "authorization_code"
+            ? `Apilo odrzuciło dane autoryzacyjne (HTTP ${status}). Sprawdź ID klienta, sekret i ważność kodu.`
+            : `Apilo odrzuciło token odświeżający (HTTP ${status}). Połącz konto nowym kodem autoryzacyjnym.`);
+        }
+        throw new InternalServerErrorException(`Żądanie tokenu Apilo nie powiodło się${status ? ` (HTTP ${status})` : ""}.`);
       }
       throw error;
     }
@@ -207,9 +271,12 @@ export class ApiloTokenService {
     const nextTokenState: ApiloTokenState = {
       ...responseData,
       updatedAt: new Date().toISOString(),
+      ...(credentials ? credentials : this.tokenState?.clientId && this.tokenState?.clientSecret
+        ? { clientId: this.tokenState.clientId, clientSecret: this.tokenState.clientSecret }
+        : {}),
     };
-    this.tokenState = nextTokenState;
     await this.saveTokenState(nextTokenState);
+    this.tokenState = nextTokenState;
 
     return responseData.accessToken;
   }
@@ -291,7 +358,7 @@ export class ApiloTokenService {
     accessTokenExpireAt: string,
     refreshTokenExpireAt: string,
     lastRefreshedAt?: string,
-  ): ApiloTokenStatus {
+  ): Omit<ApiloTokenStatus, "credentialsConfigured"> {
     const accessExpiry = Date.parse(accessTokenExpireAt);
     const refreshExpiry = Date.parse(refreshTokenExpireAt);
 
@@ -354,6 +421,23 @@ export class ApiloTokenService {
   private getOptionalConfigValue(key: keyof Config): string | undefined {
     const value = this.config.get(key, { infer: true });
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  private hasConfiguredCredentials(): boolean {
+    return Boolean(this.getOptionalConfigValue("apiloClientId") && this.getOptionalConfigValue("apiloClientSecret"));
+  }
+
+  private getEnvironmentCredentials(): { clientId: string; clientSecret: string } {
+    return {
+      clientId: this.getRequiredConfigValue("apiloClientId", "APILO_CLIENT_ID"),
+      clientSecret: this.getRequiredConfigValue("apiloClientSecret", "APILO_CLIENT_SECRET"),
+    };
+  }
+
+  private getSavedOrEnvironmentCredentials(): { clientId: string; clientSecret: string } {
+    return this.tokenState?.clientId && this.tokenState?.clientSecret
+      ? { clientId: this.tokenState.clientId, clientSecret: this.tokenState.clientSecret }
+      : this.getEnvironmentCredentials();
   }
 
   private getRequiredConfigValue(key: keyof Config, label: string): string {

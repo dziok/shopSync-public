@@ -1,3 +1,5 @@
+import { TemplateResetButton } from './TemplateResetButton';
+import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -162,10 +164,11 @@ function AddLaptopNew(props: AddProductProps) {
 
 
     // Formularz (react-hook-form) – rejestracja pól
-    const { register, handleSubmit, setValue, reset, watch, control, formState, getValues } = useForm<IFormInput>({
+    const { register, handleSubmit, getFieldState, setValue, reset, watch, control, formState, getValues } = useForm<IFormInput>({
         mode: "onBlur",
         reValidateMode: "onBlur",
     });
+    const delivery = useDeliveryAutofill(setValue, getFieldState, setSelectedImages, attributeList, producers);
 
     const coerceToString = (value: unknown): string => {
         if (value == null) return "";
@@ -2914,7 +2917,7 @@ function AddLaptopNew(props: AddProductProps) {
                                 </Box>
                             </Box>
 
-                            <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="Aktywność" />
+                            <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField required label="SKU" InputLabelProps={{ shrink: true }} {...register("SKU")} />
                             <TextField required label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
                             <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
@@ -3207,7 +3210,7 @@ function AddLaptopNew(props: AddProductProps) {
                                 </Box>
                             )}
 
-                            <Button variant="outlined" onClick={handleReset}>Reset formularza</Button>
+                            <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleReset} />
                         </ThemeProvider>
                     </Box>
                 </form>
