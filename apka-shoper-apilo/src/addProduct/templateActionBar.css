@@ -1,0 +1,50 @@
+div.template-action-bar {
+    position: fixed;
+    z-index: 20;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 20px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 5px 8px;
+    padding: 6px 8px;
+    border: 1px solid #ffffff26;
+    border-radius: 8px;
+    color: white;
+    background: rgba(20, 23, 33, .86);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 3px 16px #0003;
+}
+.template-action-bar > div { justify-content: center; max-width: 100%; }
+.template-action-photos { display: inline-flex; align-items: center; border: 1px solid #ffffff35; border-radius: 5px; }
+.template-action-photos .MuiButton-root { gap: 5px; }
+.template-action-photos .MuiIconButton-root { border-left: 1px solid #ffffff35; border-radius: 0 4px 4px 0; align-self: stretch; padding-inline: 7px; }
+.template-photo-count { min-width: 2ch; font-variant-numeric: tabular-nums; font-size: 12px; text-align: center; }
+.template-action-bar .MuiButton-root, .template-action-bar .MuiFormControlLabel-root { margin: 0; }
+.template-action-bar .MuiButton-root {
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    box-shadow: none;
+    font-size: 13px;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.template-action-bar .MuiFormControlLabel-label { font-size: 13px; }
+.template-action-bar .MuiCheckbox-root { padding: 5px; }
+.template-action-bar .MuiCheckbox-root svg { font-size: 19px; }
+.template-action-bar .Mui-focusVisible { outline: 2px solid white; outline-offset: 1px; }
+body #root:has(.template-action-bar) { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 880px) {
+    div.template-action-bar { padding: 6px; gap: 5px; }
+    body #root:has(.template-action-bar) { padding-bottom: calc(15rem + env(safe-area-inset-bottom, 0px)); }
+}
+@media (pointer: coarse) {
+    .template-action-bar .MuiButton-root, .template-action-bar .MuiFormControlLabel-root { min-height: 40px; }
+}

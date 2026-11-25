@@ -1,0 +1,37 @@
+{
+  "Specyfikacja techniczna": {
+    "Brak dysku w zestawie": "pl:tekst:30cb3de324c0bfc263dc6391",
+    "Brak systemu operacyjnego": "pl:tekst:0a11d0ec918543e68f80edf3",
+    "Dysk:": "pl:tekst:1fc97e7837cf06ecc6caa471",
+    "GB": "pl:tekst:b7408b1e36287532cf0176d0",
+    "Zainstalowany system:": "pl:tekst:8694289bcbd6d3db9ef7ae49",
+    "-rdzeniowy procesor": "pl:tekst:02ef2d8b5bfd248807b42d1f",
+    ", taktowanie": "pl:tekst:b61b299f0dee652daeb4a728",
+    "GHz": "pl:tekst:8ef5533f53a292ce4fff1333",
+    "w trybie turbo": "pl:tekst:30851abec619b506ec197a04",
+    "Pamięć operacyjna": "pl:tekst:ef5ff6cd6d72dc31ef514b63",
+    "Karta graficzna": "pl:tekst:d958205c4774029204d0dacf",
+    "W zestawie:": "pl:tekst:85d9d743d81e0d70b30c0725",
+    "Napęd:": "pl:tekst:ef8339647bc6149f969f92b2",
+    "Porty:": "pl:tekst:fca99bf35d03f9b59a977486"
+  },
+  "Specyfikacja AIO": {
+    "Rozdzielczość:": "pl:tekst:dff291b2fb7fe1465eaeab4e",
+    "Typ matrycy:": "pl:tekst:5c1e14ddbb5ea9e0a3992610",
+    "Rozmiar ekranu:": "pl:tekst:d9ad5a390e0446dee0f70ed8",
+    "Częstotliwość odświeżania ekranu:": "pl:tekst:1692609b2a576d722817d7a0",
+    "Ekran dotykowy:": "pl:tekst:206b292db70be1d6d5b44077",
+    "Mikrofon:": "pl:tekst:58a7f5c895ce65f955bbb1d5",
+    "Kamerka internetowa:": "pl:tekst:7b8140790be114489f078e10",
+    "Tak": "pl:tekst:2582d4aa90bc61347cb78a93",
+    "Nie": "pl:tekst:647728db1f179d7596a75943",
+    "Podstawka AIO:": "pl:tekst:5d650d4319cca93587f3af13"
+  },
+  "Nagłówki podzespołów": {
+    "➡️ Procesor": "pl:tekst:0e7809efbec949965ca2d9bd",
+    "➡️ Pamięć RAM": "pl:tekst:c07c8d0d9c9f83dbe35898ea",
+    "➡️ Dysk": "pl:tekst:ae068bfda8cd9f2cc89c38fc",
+    "GB": "pl:tekst:f14018906519766a920425a2",
+    "➡️ Karta graficzna": "pl:tekst:45d9c62818e53f2189fa3430"
+  }
+}

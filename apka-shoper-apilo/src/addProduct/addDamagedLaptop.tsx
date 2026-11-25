@@ -15,8 +15,10 @@ import { ProductSafetyCertificateResource, ProductSafetyProducerResource } from 
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 type AddDamagedLaptopProps = {
     authToken: string,
@@ -53,7 +55,7 @@ interface IFormInput {
 
 function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     const [portsListString, setPortsListString] = useState("");
-    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, control } = useForm<IFormInput>()
+    const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, getValues, setValue, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
     const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages);
@@ -117,6 +119,8 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
 
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
+        if (!String(data.name ?? '').trim()) { toast.error("Uzupełnij polski tytuł produktu."); return; }
         try {
             //dodaj zdjęcia do apilo
             if (addToApilo) try {
@@ -138,7 +142,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
             const safetyCertificateIds = Array.isArray(data.productSafetyCertificateIds)
@@ -186,6 +190,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     Authorization: `Bearer ${props.authToken}`
                 }
             });
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -209,7 +214,6 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -234,9 +238,6 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     }
                 });
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -259,18 +260,21 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error));
+                toast.error(progress.error(error));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getShoperErrorMessage(error));
+                toast.error(progress.error(error));
             }
 
         };
@@ -538,10 +542,18 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
 
                             <ProductImageManager {...images} />
 
-                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages} />
-                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                            </ApiloSubmitControls>
+                            <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                                photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                                <TemplateResetButton disabled={isSubmitting || images.uploadingImages} />
+                                <FormAssistant template="damaged-laptop" token={props.authToken} control={control}
+                                    read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty}
+                                    write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })} />
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                    <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                        {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                    </Button>
+                                </ApiloSubmitControls>
+                            </TemplateActionBar>
                         </ThemeProvider>
                     </Box>
                 </form>

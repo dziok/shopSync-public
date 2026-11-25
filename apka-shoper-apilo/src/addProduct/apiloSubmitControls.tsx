@@ -10,7 +10,7 @@ export function ApiloSubmitControls({ addToApilo, onChange, children }: {
         {children}
         <FormControlLabel
             control={<Checkbox checked={addToApilo} onChange={event => onChange(event.target.checked)} />}
-            label="Dodaj też do Apilo"
+            label="Apilo"
         />
     </Box>;
 }

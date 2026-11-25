@@ -57,6 +57,7 @@ const formatDiagonal = (value: unknown) => {
 };
 
 import { batteryDescription, GradeDescriptios, matrixGradeDescriptios } from "../templates/laptopTemplate";
+import { templateCopy } from "../../templateCopy";
 
 const cleanDiskType = (value: unknown) => {
     const raw = clean(value);
@@ -170,13 +171,13 @@ export function AllegroLaptopTemplate({
     const resolutionLabel = formatResolution(resolution);
     const diagonalLabel = formatDiagonal(diagonal);
     const screenLabel = [diagonalLabel, resolutionLabel].filter(Boolean).join(" ");
-    const caseLabelRaw = GradeDescriptios[caseGrade] ?? caseGrade;
-    const matrixLabelRaw = matrixGradeDescriptios[matrixGrade] ?? matrixGrade;
+    const caseLabelRaw = templateCopy('laptop-new', 'pl:Klasa wizualna:' + caseGrade, GradeDescriptios[caseGrade] ?? caseGrade);
+    const matrixLabelRaw = templateCopy('laptop-new', 'pl:Stan matrycy:' + matrixGrade, matrixGradeDescriptios[matrixGrade] ?? matrixGrade);
     const caseLabelBase = skipCaseDescription ? stripDescription(caseLabelRaw) : caseLabelRaw;
     const matrixLabelBase = skipMatrixDescription ? stripDescription(matrixLabelRaw) : matrixLabelRaw;
     const caseLabel = [clean(caseLabelBase), clean(additionalInfo_case)].filter(Boolean).join(" ");
     const matrixLabel = [clean(matrixLabelBase), clean(additionalInfo_matrix)].filter(Boolean).join(" ");
-    const batteryLabel = clean(batteryDescription[battery] ?? battery).replace(/(\d),(\d)/g, "$1.$2");
+    const batteryLabel = clean(templateCopy('laptop-new', 'pl:Bateria:' + battery, batteryDescription[battery] ?? battery)).replace(/(\d),(\d)/g, "$1.$2");
     const batteryLine = batteryLabel
         ? `<b>W komplecie zasilacz i bateria - </b>${batteryLabel}`
         : "<b>W komplecie zasilacz i bateria</b>";

@@ -4,12 +4,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Config } from './config/config';
 import * as express from 'express';
+import { configureJsonParsers } from './json-parsers';
 import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors();
+  configureJsonParsers(app);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

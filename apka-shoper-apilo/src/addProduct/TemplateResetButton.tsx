@@ -1,12 +1,13 @@
 import { createContext, useContext } from 'react';
-import Button from '@mui/material/Button';
+import { IconButton, Tooltip } from '@mui/material';
+import { Eraser } from 'lucide-react';
 
 export const TemplateResetContext = createContext<(() => void) | null>(null);
 
 export function TemplateResetButton({ disabled, beforeReset }: { disabled?: boolean; beforeReset?: () => void }) {
     const reset = useContext(TemplateResetContext);
-    return <Button variant="outlined" type="button" disabled={!reset || disabled} onClick={() => {
+    return <Tooltip title="Wyczyść formularz"><span><IconButton size="small" color="inherit" aria-label="Wyczyść formularz" type="button" disabled={!reset || disabled} onClick={() => {
         beforeReset?.();
         reset?.();
-    }}>Wyczyść formularz</Button>;
+    }}><Eraser size={18} /></IconButton></span></Tooltip>;
 }

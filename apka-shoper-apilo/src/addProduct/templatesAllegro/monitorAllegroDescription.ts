@@ -8,6 +8,7 @@ import {
   monitorVC,
 } from "../additionalDescriptions/visualConditionDescriptions";
 import { renderAdditionalFeatureItems } from "../additionalFeatures";
+import { savedCopy } from "../../templateCopy";
 
 export type MonitorAllegroDescriptionInput = {
   producer: string;
@@ -194,8 +195,8 @@ export const buildMonitorAllegroDescription = (
   const monitorName = escapeHtml(input.model ? `Monitor ${input.model}` : input.name || "Monitor");
   const visualConditionKey = input.visualCondition.trim();
   const caseConditionKey = input.caseCondition.trim();
-  const visualConditionDescription = monitorVC[visualConditionKey]?.trim() ?? "";
-  const caseConditionDescription = monitorCaseVC[caseConditionKey]?.trim() ?? "";
+  const visualConditionDescription = savedCopy('monitor', 'pl:Stan matrycy:' + visualConditionKey) ?? monitorVC[visualConditionKey]?.trim() ?? "";
+  const caseConditionDescription = savedCopy('monitor', 'pl:Stan obudowy:' + caseConditionKey) ?? monitorCaseVC[caseConditionKey]?.trim() ?? "";
   const visualConditionText = visualConditionKey
     ? `${escapeHtml(visualConditionKey)}${visualConditionDescription ? ` = <b>${escapeHtml(visualConditionDescription)}</b>` : ""}`
     : "";

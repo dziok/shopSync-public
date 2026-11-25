@@ -11,7 +11,10 @@ import { toast } from "react-toastify";
 import { API_URL } from "./config";
 import { Product, SearchResult } from './types';
 import { Divider, ListItemText, Menu, MenuItem } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
+import { WorkspaceHeader, type NavEntry } from './WorkspaceHeader';
 import { pcParameters } from './allegroParameters/pcParameters';
+import { CatalogContext } from './allegroParameters/catalog';
 import AddGamingPC from './addProduct/addGamingPC';
 import AddCpu from './addProduct/addCpu';
 import AddPC from './addProduct/addPc';
@@ -26,8 +29,9 @@ import { TemplateResetContext } from './addProduct/TemplateResetButton';
 import { DeliveryContext, DeliveryReport } from './useDeliveryAutofill';
 import type { DeliveryProduct } from './bulkFormMapping';
 import ApiloTokenStatus from './apiloTokenStatus';
-import TemplateSettingsPanel from './templateSettingsPanel';
 import { applyTemplateSettings, TemplateKey, TemplateSettingsFile, TEMPLATE_NAMES } from './templateSettings';
+import { installTemplateCopy } from './templateCopy';
+const TemplateSettingsPanel = React.lazy(() => import('./templateSettingsPanel'));
 
 type AddProductProps = {
     authToken: string
@@ -93,7 +97,11 @@ function CategorySelection(props: AddProductProps) {
     const [formRevision, setFormRevision] = useState(0);
     const [showTemplateAdmin, setShowTemplateAdmin] = useState(false);
     const [adminTemplateKey, setAdminTemplateKey] = useState<TemplateKey>('pc');
-    const [templateSettings, setTemplateSettings] = useState<TemplateSettingsFile | null>(null);
+    const [templateSettings, storeTemplateSettings] = useState<TemplateSettingsFile | null>(null);
+    const setTemplateSettings = useCallback((file: TemplateSettingsFile) => {
+        installTemplateCopy(file);
+        storeTemplateSettings(file);
+    }, []);
     const [templateSettingsError, setTemplateSettingsError] = useState(false);
 
     const [verificationUrl, setVerificationUrl] = useState('');
@@ -142,20 +150,27 @@ function CategorySelection(props: AddProductProps) {
         : showAddLaptop ? 'laptop' : showAddLaptopNew ? 'laptop-new'
         : showAddIOS ? 'ios' : showAddAndroid ? 'android' : showAddCpu ? 'cpu' : null;
 
-    const loadTemplateSettings = useCallback(async () => {
+    const loadTemplateSettings = useCallback(async (signal?: AbortSignal) => {
         setTemplateSettingsError(false);
         try {
             const response = await axios.get<TemplateSettingsFile>(`${API_URL}/template-settings`, {
+                signal,
                 headers: { Authorization: `Bearer ${props.authToken}` },
             });
+            if (signal?.aborted) return;
             setTemplateSettings(response.data);
         } catch (error) {
+            if (signal?.aborted) return;
             console.error('Nie udało się pobrać ustawień szablonów:', error);
             setTemplateSettingsError(true);
         }
     }, [props.authToken]);
 
-    useEffect(() => { void loadTemplateSettings(); }, [loadTemplateSettings]);
+    useEffect(() => {
+        const controller = new AbortController();
+        void loadTemplateSettings(controller.signal);
+        return () => { controller.abort(); installTemplateCopy(null); };
+    }, [loadTemplateSettings]);
 
     useEffect(() => {
         if (!activeTemplateKey || !templateSettings || showTemplateAdmin) return;
@@ -865,61 +880,71 @@ function CategorySelection(props: AddProductProps) {
         action();
     };
 
+    const templateLink = (key: TemplateKey, action: () => void, shortLabel?: string): NavEntry => ({
+        id: key, label: TEMPLATE_NAMES[key], shortLabel,
+        select: () => { setShowBulkImport(false); openTemplate(key, action); },
+    });
+    const openOperation = (action: () => void) => {
+        setShowBulkImport(false);
+        setShowChatGptFeed(false);
+        action();
+    };
+    const currentPage = showTemplateAdmin ? 'settings' : showBulkImport ? 'csv' : showChatGptFeed ? 'feed'
+        : showApiloOredr ? 'orders' : showShoperDeliveryTime ? 'shipping' : showOnlyRelatedProducts ? 'related' : activeTemplateKey;
+
     return (
         <div>
-            <div
-                style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                    justifyContent: "center",
-                    padding: "12px",
-                    borderRadius: "8px",
+            <WorkspaceHeader current={currentPage} error={error}
+                templates={[
+                    templateLink('pc', handleAddPC, 'Biurowe'), templateLink('gaming', handleAddGamingPCClick, 'Gamingowe'),
+                    templateLink('monitor', handleAddMonitorClick), templateLink('laptop-new', handleAddLaptopNew),
+                    templateLink('damaged-laptop', handleAddDamagedLaptopClick), templateLink('ios', handleAddIOSClick, 'iOS'),
+                    templateLink('android', handleAddAndroidClick, 'Android'), templateLink('custom', handleAddCustomProductClick),
+                ]}
+                orders={() => openOperation(handleApiloOrder)} delivery={handleBulkImport}
+                tools={[
+                    { id: 'shipping', label: 'Czas wysyłki', select: () => openOperation(handleShoperDeliveryTime) },
+                    { id: 'related', label: 'Produkty powiązane', select: () => openOperation(handleRelatedProducts) },
+                    { id: 'feed', label: 'Feed ChatGPT', select: handleChatGptFeed },
+                    { id: 'parameters', label: 'Parametry kategorii Allegro', checked: showCategoryParametersHelper, select: handleToggleCategoryParametersHelper },
+                ]}
+                settings={() => {
+                    setShowBulkImport(false); setShowChatGptFeed(false);
+                    setAdminTemplateKey(activeTemplateKey ?? adminTemplateKey); setShowTemplateAdmin(true);
                 }}
             >
                 <ApiloTokenStatus authToken={props.authToken} onSessionUpdated={props.onSessionUpdated} />
 
                 {loadingAllegroToken ? (
-                    <button style={buttonStyle()} disabled>
-                        Sprawdzanie Allegro...
+                    <button type="button" className="ws-account" disabled>
+                        Sprawdzanie Allegro…
                     </button>
                 ) : allegroAccounts.length > 0 ? (
                     <button
                         id="allegro-account-button"
+                        type="button"
+                        className="ws-account"
+                        data-state={accessTokenAllegro ? 'connected' : 'warning'}
                         aria-controls={isAllegroMenuOpen ? 'allegro-account-menu' : undefined}
                         aria-expanded={isAllegroMenuOpen ? 'true' : undefined}
                         aria-haspopup="menu"
-                        style={buttonStyle(accessTokenAllegro ? "#3c743c" : "rgb(154 52 39)")}
                         onClick={handleOpenAllegroMenu}
                     >
-                        {accessTokenAllegro ? 'Aktywne' : 'Wymaga sprawdzenia'}: {activeAllegroAccount?.label ?? 'Konto Allegro'}
-                        <span
-                            aria-hidden="true"
-                            style={{
-                                borderLeft: "4px solid transparent",
-                                borderRight: "4px solid transparent",
-                                borderTop: "5px solid currentColor",
-                                display: "inline-block",
-                                marginLeft: "6px",
-                                transform: isAllegroMenuOpen ? "rotate(180deg)" : "none",
-                                transition: "transform 0.15s ease",
-                                verticalAlign: "middle",
-                            }}
-                        />
+                        <small>Allegro</small>
+                        <span><strong>{activeAllegroAccount?.label ?? 'Konto'}</strong>{!accessTokenAllegro && ' · Sprawdź połączenie'}</span>
+                        <ChevronDown aria-hidden="true" className="ws-caret" />
                     </button>
                 ) : verificationUrlProd ? (
                     <a
                         href={verificationUrlProd}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ textDecoration: "none" }}
+                        className="ws-account" data-state="warning"
                     >
-                        <button style={buttonStyle("rgb(154 52 39)")}>
-                            Dokończ logowanie
-                        </button>
+                        Dokończ logowanie do Allegro
                     </a>
                 ) : (
-                    <button style={buttonStyle("rgb(154 52 39)")} onClick={() => { void startAuthProd(); }}>
+                    <button type="button" className="ws-account" data-state="warning" onClick={() => { void startAuthProd(); }}>
                         Zaloguj przez Allegro
                     </button>
                 )}
@@ -929,7 +954,8 @@ function CategorySelection(props: AddProductProps) {
                     anchorEl={allegroMenuAnchorEl}
                     open={isAllegroMenuOpen}
                     onClose={handleCloseAllegroMenu}
-                    MenuListProps={{ 'aria-labelledby': 'allegro-account-button' }}
+                    MenuListProps={{ 'aria-labelledby': 'allegro-account-button', className: 'ws-menu-list' }}
+                    slotProps={{ paper: { className: 'ws-menu-paper' } }}
                 >
                     <MenuItem disabled>
                         <ListItemText
@@ -996,33 +1022,7 @@ function CategorySelection(props: AddProductProps) {
                     )}
                 </Menu>
 
-                {error && <p style={{ color: "red", width: "100%" }}>{error}</p>}
-
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('pc', handleAddPC); }}>Komputery biurowe</button>
-                {/* <button style={buttonStyle()} onClick={handleAddProductClick}>Komputery</button> */}
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('gaming', handleAddGamingPCClick); }}>Komputery gamingowe</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('monitor', handleAddMonitorClick); }}>Monitory</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('custom', handleAddCustomProductClick); }}>Inne</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('damaged-laptop', handleAddDamagedLaptopClick); }}>Uszkodzone laptopy</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('laptop-new', handleAddLaptopNew); }}>Laptopy nowe</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('ios', handleAddIOSClick); }}>Mobilki IOS</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); openTemplate('android', handleAddAndroidClick); }}>Mobilki Android</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleApiloOrder(); }}>zamówienia</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleShoperDeliveryTime(); }}>czas wysyłki</button>
-                <button style={buttonStyle()} onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); handleRelatedProducts(); }}>produkty powiązane</button>
-                <button style={buttonStyle(showChatGptFeed ? '#3c743c' : 'rgb(54 52 52)')} onClick={handleChatGptFeed}>Feed ChatGPT</button>
-                <button style={buttonStyle(showBulkImport ? '#3c743c' : 'rgb(54 52 52)')} onClick={handleBulkImport}>Dostawa CSV</button>
-                <button style={buttonStyle(showTemplateAdmin ? '#3c743c' : 'rgb(54 52 52)')}
-                    onClick={() => { setShowBulkImport(false); setShowChatGptFeed(false); setAdminTemplateKey(activeTemplateKey ?? adminTemplateKey); setShowTemplateAdmin(true); }}>
-                    Ustawienia szablonów
-                </button>
-                <button
-                    style={buttonStyle(showCategoryParametersHelper ? "#3c743c" : "rgb(54 52 52)")}
-                    onClick={handleToggleCategoryParametersHelper}
-                >
-                    Parametry kategorii Allegro
-                </button>
-            </div>
+            </WorkspaceHeader>
 
             {showCategoryParametersHelper && (
                 <div
@@ -1085,9 +1085,10 @@ function CategorySelection(props: AddProductProps) {
             )}
 
 
-            {showTemplateAdmin && templateSettings && <TemplateSettingsPanel authToken={props.authToken}
+            {showTemplateAdmin && templateSettings && <React.Suspense fallback="Ładowanie edytora opisów…"><TemplateSettingsPanel authToken={props.authToken}
+                allegroAccountId={activeAllegroAccountId}
                 initialKey={adminTemplateKey} settings={templateSettings} onSaved={setTemplateSettings}
-                onClose={() => setShowTemplateAdmin(false)} />}
+                onClose={() => setShowTemplateAdmin(false)} /></React.Suspense>}
             {<BulkImportPanel visible={showBulkImport} authToken={props.authToken} editing={!!deliveryProduct}
                 onBack={handleBulkImport} notice={deliveryNotice} onOpen={product => {
                     const { template } = product.draft;
@@ -1115,6 +1116,7 @@ function CategorySelection(props: AddProductProps) {
                     {TEMPLATE_NAMES[activeTemplateKey]}: kategoria Shoper ustawiona w panelu na {override}.
                 </div> : null;
             })()}
+            <CatalogContext.Provider value={activeTemplateKey ? templateSettings.templates[activeTemplateKey].allegro.parameterCatalog : undefined}>
             {showAddGamingPC && <AddGamingPC key={`gaming-${allegroSessionKey}`} authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} allegroAccountId={activeAllegroAccountId} />}
             {showAddMonitor && <AddMonitor key={`monitor-${allegroSessionKey}`} authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} allegroAccountId={activeAllegroAccountId} />}
             {showAddCustomProduct && <AddCustomProduct authToken={props.authToken} />}
@@ -1125,7 +1127,7 @@ function CategorySelection(props: AddProductProps) {
             {showAddAndroid && <AddPhoneAndroid authToken={props.authToken} />}
             {showAddCpu && <AddCpu authToken={props.authToken} />}
             {showAddPC && <AddPC key={`pc-${allegroSessionKey}`} authToken={props.authToken} accessTokenAllegro={accessTokenAllegro} allegroAccountId={activeAllegroAccountId} />}
-            </DeliveryContext.Provider></DeliveryReport.Provider></TemplateResetContext.Provider>}
+            </CatalogContext.Provider></DeliveryContext.Provider></DeliveryReport.Provider></TemplateResetContext.Provider>}
             {!showTemplateAdmin && showApiloOredr && <ApiloOrdersPanel authToken={props.authToken} />}
             {!showTemplateAdmin && showShoperDeliveryTime && <ShoperDeliveryTimePanel authToken={props.authToken} />}
             {!showTemplateAdmin && showOnlyRelatedProducts && <RelatedProductsPanel authToken={props.authToken} />}

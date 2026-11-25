@@ -71,6 +71,10 @@ export function formatPhoneMatrixGrade(value: string, description?: string): str
 }
 
 export const PHONE_ATTRIBUTE_FIELDS = Object.keys(names) as PhoneAttributeField[];
+export function phoneFieldLabel(field: PhoneAttributeField) {
+    const label = names[field][0];
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
 export const PHONE_ATTRIBUTE_GROUP_ID = 16;
 const optionalFields: PhoneAttributeField[] = ["additionalInfo", "screenName", "simType", "lens_ultraWide", "lens_tele", "lens_lidar"];
 

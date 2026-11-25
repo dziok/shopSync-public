@@ -131,7 +131,7 @@ function ParamField({
     const label = getLabel(param);
 
     return (
-        <Box key={param.id} sx={{ opacity: disabled ? 0.7 : 1, mb: 1.5, width: "100%" }}>
+        <Box key={param.id} data-ai-allegro={param.id} sx={{ opacity: disabled ? 0.7 : 1, mb: 1.5, width: "100%" }}>
             {param.type === "dictionary" && param.dictionary && isProcessorModel && (
                 <Autocomplete
                     options={param.dictionary.map((d) => d.value)}

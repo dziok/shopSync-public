@@ -1,3 +1,4 @@
+import { officeRow } from '../officeSpecRows';
 import { diskTypesDescriptions, ramTypesDescriptions } from "../additionalDescriptions/pcAdditionalDescription"
 import { renderAdditionalFeatureItems } from "../additionalFeatures";
 import { getAioStandDescription } from "../aioStand";
@@ -462,26 +463,26 @@ export const PcApiloSpecyfication = (
     // fragment o dysku + systemie
     let diskAndSystem = "";
     if (diskType === "brak dysku") {
-        diskAndSystem = `<li><b>Brak dysku w zestawie</b></li>
-                       <li><b>Brak systemu operacyjnego</b></li>`;
+        diskAndSystem = `<li>${officeRow('noDisk')}</li>
+                       <li>${officeRow('noSystem')}</li>`;
     } else {
-        diskAndSystem = `<li> Dysk: <b>${diskType} ${diskCapacity} GB</b></li>`;
+        diskAndSystem = `<li>${officeRow('disk', { typ: diskType, pojemnosc: diskCapacity })}</li>`;
         if (system === "brak systemu") {
-            diskAndSystem += `<li><b>Brak systemu operacyjnego</b></li>`;
+            diskAndSystem += `<li>${officeRow('noSystem')}</li>`;
         } else {
-            diskAndSystem += `<li> Zainstalowany system: <b>${system}</b></li>`;
+            diskAndSystem += `<li>${officeRow('system', { system })}</li>`;
         }
     }
 
     return `<ul>
-      <li> ${cpuCores}-rdzeniowy procesor <b>${cpu}-${cpuModel}</b>, taktowanie <b>${cpuClockSpeed}GHz</b> w trybie turbo <b>${cpuMaxClockSpeed}GHz</b></li>
-      <li> Pamięć operacyjna <b>${ramAmount} ${ramType}</b></li>
+      <li>${officeRow('cpu', { rdzenie: cpuCores, seria: cpu, model: cpuModel, bazowe: cpuClockSpeed, turbo: cpuMaxClockSpeed })}</li>
+      <li>${officeRow('ram', { pojemnosc: ramAmount, typ: ramType })}</li>
       ${diskAndSystem}
-      <li> ${caseDescription} <b>${caseType}</b></li>
-      <li> Karta graficzna <b>${gpu}</b></li>
-      <li> W zestawie: <b>${included}</b></li>
-      <li> Napęd: <b>${dvd}</b></li>
-      <li> Porty: <b>${ports}</b></li>
+      <li>${officeRow('chassis', { opis: caseDescription, typ: caseType })}</li>
+      <li>${officeRow('gpu', { grafika: gpu })}</li>
+      <li>${officeRow('included', { wyposazenie: included })}</li>
+      <li>${officeRow('dvd', { naped: dvd })}</li>
+      <li>${officeRow('ports', { porty: ports })}</li>
     </ul>`;
 };
 
@@ -496,14 +497,14 @@ export const PcApiloAioSpecyfication = (
     camera: string,
     aioStand = "",
 ) => `                 
-<ul> <li> Rozdzielczość: <b>${resolution}</b></li>
-<li> Typ matrycy: <b>${matrixType} </b></li>
-<li> Rozmiar ekranu: <b>${matrixSize} </b></li>
-<li> Częstotliwość odświeżania ekranu: <b>${Frequency} </b></li>
-<li> Ekran dotykowy: <b>${touchScreen ? "Tak" : "Nie"}</b></li>
-<li> Mikrofon: <b>${microphone ? "Tak" : "Nie"}</b></li>
-<li> Kamerka internetowa: <b>${camera ? "Tak" : "Nie"}</b></li>
-${getAioStandDescription(aioStand, 'pl') ? `<li> Podstawka AIO: <b>${getAioStandDescription(aioStand, 'pl')}</b></li>` : ""}</ul>
+<ul> <li>${officeRow('resolution', { rozdzielczosc: resolution })}</li>
+<li>${officeRow('panel', { matryca: matrixType })}</li>
+<li>${officeRow('size', { przekatna: matrixSize })}</li>
+<li>${officeRow('frequency', { odswiezanie: Frequency })}</li>
+<li>${officeRow('touch', { dotyk: touchScreen ? "Tak" : "Nie" })}</li>
+<li>${officeRow('mic', { mikrofon: microphone ? "Tak" : "Nie" })}</li>
+<li>${officeRow('camera', { kamera: camera ? "Tak" : "Nie" })}</li>
+${getAioStandDescription(aioStand, 'pl') ? `<li>${officeRow('stand', { podstawka: getAioStandDescription(aioStand, 'pl') })}</li>` : ""}</ul>
 `
 
 export const ApiloDescription = (
@@ -520,19 +521,19 @@ export const ApiloDescription = (
     gpuDescriptions: string
 
 ) =>
-    `<h2>➡️ Procesor ${cpu}-${cpuModel}</h2>
+    `<h2>${officeRow('cpuTitle', { seria: cpu, model: cpuModel })}</h2>
                     <p>
                     ${cpuTypesDescriptions}
                     </p>
-                <h2>➡️ Pamięć RAM ${ramAmount} ${ramType}</h2>
+                <h2>${officeRow('ramTitle', { pojemnosc: ramAmount, typ: ramType })}</h2>
                     <p>
                     ${ramTypesDescriptions}
                     </p>
-                <h2>➡️ Dysk ${diskType} ${diskCapacity} GB</h2>
+                <h2>${officeRow('diskTitle', { typ: diskType, pojemnosc: diskCapacity })}</h2>
                     <p>
                     ${diskTypesDescriptions}
                     </p>
-                <h2>➡️ Karta graficzna ${gpu}</h2>
+                <h2>${officeRow('gpuTitle', { grafika: gpu })}</h2>
                             <p>
                     ${gpuDescriptions}
                     </p>`

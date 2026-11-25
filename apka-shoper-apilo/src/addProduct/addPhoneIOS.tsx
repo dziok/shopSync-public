@@ -1,3 +1,4 @@
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -12,13 +13,13 @@ import './addProducts.css';
 import { ProductImageManager, useProductImages } from "./productImageManager";
 import { IOSTemplate } from "./templates/iosTemplate";
 import { matrixGradeDescriptios } from "./templates/laptopTemplate";
-import { monitorVC, pcVC } from "./additionalDescriptions/visualConditionDescriptions";
+import { pcVC } from "./additionalDescriptions/visualConditionDescriptions";
 import { systemType } from "./additionalDescriptions/pcAdditionalDescription";
 import { ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { AddImageShoper } from "../backendQueries/addImageShoper";
@@ -27,6 +28,8 @@ import { phoneDescriptionSignature, phoneOfferFormAttributes, phoneOfferGroupIds
 import { ShoperImportedFieldStyles, shoperFieldWasProvided, useShoperImportedFields } from "./shoperImportedFields";
 import { PhoneAdditionalShoperFields, PhoneGroupPicker, PhoneShoperSelect, usePhoneAvailableGroups, usePhoneCategoryGroups, usePhoneShoperAttributes } from "./phoneShoperFields";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 type AddphoneIOSProps = {
     authToken: string,
@@ -75,6 +78,7 @@ interface IFormInput {
 }
 let deviceType = ""
 function AddPhoneIOS(props: AddphoneIOSProps) {
+    const [{ monitorVC }] = useState(() => templateDictionaries('ios'));
     const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, getValues, reset, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, setSelectedImages, imageLinks, setImageLinks } = images;
@@ -257,6 +261,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
         hasCategoryAttributeGroup, manualAttributeGroupId, getValues, setValue, markImportedFields]);
 
     const handleUpdateProduct = async (data: IFormInput) => {
+        if (!String(data.name ?? '').trim()) { toast.error("Uzupełnij polski tytuł produktu."); return; }
         if (!loadedOfferId || Number(shoperOfferId.trim()) !== loadedOfferId) {
             toast.error("Najpierw pobierz produkt Shoper po ID.");
             return;
@@ -304,6 +309,8 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
 
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
+        if (!String(data.name ?? '').trim()) { toast.error("Uzupełnij polski tytuł produktu."); return; }
         try {
             if (categoryGroups.loading || phoneAttributes.loading || phoneAttributes.error || !phoneAttributes.attributes.length ||
                 (!hasCategoryAttributeGroup && !manualAttributeGroupId)) {
@@ -330,7 +337,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
             const safetyCertificateIds = Array.isArray(data.productSafetyCertificateIds)
@@ -371,6 +378,7 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                     Authorization: `Bearer ${props.authToken}`
                 }
             });
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -394,7 +402,6 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -473,9 +480,6 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                     }
                 });
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -498,18 +502,21 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error, phoneAttributes.attributes));
+                toast.error(progress.error(error, phoneAttributes.attributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(error instanceof Error ? error.message : getShoperErrorMessage(error, phoneAttributes.attributes));
+                toast.error(progress.error(error, phoneAttributes.attributes));
             }
 
         };
@@ -795,14 +802,28 @@ function AddPhoneIOS(props: AddphoneIOSProps) {
 
                             <ProductImageManager {...images} />
 
-                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
-                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                            </ApiloSubmitControls>
-                            <Button variant="outlined" type="button" disabled={!loadedOfferId || updatingProduct || loadingShoperOffer || !images.imagesReady || images.uploadingImages}
-                                onClick={handleSubmit(handleUpdateProduct)}>
-                                {updatingProduct ? "Aktualizowanie..." : "Zaktualizuj produkt Shoper"}
-                            </Button>
+                            <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                                photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                                <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
+                                <FormAssistant template="ios" token={props.authToken} control={control} attributes={phoneAttributes.attributes}
+                                    attributesPending={categoryGroups.loading || phoneAttributes.loading} attributesError={phoneAttributes.error}
+                                    read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                                    write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })} />
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                    <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                        {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                    </Button>
+                                </ApiloSubmitControls>
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    type="button"
+                                    disabled={!loadedOfferId || updatingProduct || loadingShoperOffer || !images.imagesReady || images.uploadingImages}
+                                    onClick={handleSubmit(handleUpdateProduct)}
+                                >
+                                    {updatingProduct ? "Aktualizowanie..." : "Aktualizuj Shoper"}
+                                </Button>
+                            </TemplateActionBar>
                         </ThemeProvider>
                     </Box>
                 </form>

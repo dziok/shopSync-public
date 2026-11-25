@@ -3,8 +3,8 @@ import axios from 'axios';
 import Papa from 'papaparse';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 const importTheme = createTheme({ palette: { mode: 'dark', background: { paper: '#262626' } } });
-const modelOptions = ['gpt-5.4-mini', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'];
-import { Alert, Box, Button, Chip, Collapse, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import AiSettingsPanel from './AiSettingsPanel';
+import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { toast } from 'react-toastify';
 import { API_URL } from './config';
 import { getApiErrorMessage } from './backendQueries/apiErrorMessage';
@@ -12,7 +12,6 @@ import { assignDeliveryPhotos, type DeliveryProduct } from './bulkFormMapping';
 import type { Attribute } from './types';
 import { ColumnMapping, defaultMapping, ImportDraft, ImportRow, ImportTemplate, makeDrafts, TEMPLATE_LABELS, validateDraft } from './bulkImport';
 
-type AiSettings = { configured: boolean; model: string; instructions: string };
 type AiResult = { template: ImportTemplate; title: string; fields: { name: string; value: string }[]; issues: string[]; confidence: number; usage?: { inputTokens: number; outputTokens: number } };
 
 export default function BulkImportPanel({ authToken, visible, editing, notice, onBack, onOpen }: {
@@ -24,27 +23,14 @@ export default function BulkImportPanel({ authToken, visible, editing, notice, o
     const [rows, setRows] = useState<ImportRow[]>([]);
     const [mapping, setMapping] = useState<ColumnMapping>({ sku: '', manufacturer: '', model: '', price: '', condition: '' });
     const [drafts, setDrafts] = useState<ImportDraft[]>([]);
-    const [settings, setSettings] = useState<AiSettings>({ configured: false, model: 'gpt-5.4-mini', instructions: '' });
-    const [key, setKey] = useState('');
-    const [savedModel, setSavedModel] = useState('');
-    const [connection, setConnection] = useState('');
-    const [connecting, setConnecting] = useState(false);
-    const invalidKey = !!key.trim() && (!key.trim().startsWith('sk-') || /\.\.\.|…|\s/.test(key.trim()));
-    const [showSettings, setShowSettings] = useState(false);
+    const [configured, setConfigured] = useState(false);
     const [busy, setBusy] = useState(false);
     const [selected, setSelected] = useState<number | null>(null);
     const [usage, setUsage] = useState({ input: 0, output: 0 });
     const cancelled = useRef(false);
     const api = { headers: { Authorization: `Bearer ${authToken}` } };
 
-    useEffect(() => {
-        if (!visible) return;
-        axios.get<AiSettings>(`${API_URL}/bulk-ai/settings`, { headers: { Authorization: `Bearer ${authToken}` } }).then(({ data }) => {
-            setSettings(data); setSavedModel(data.model); if (!data.configured) setShowSettings(true);
-        })
-            .catch(() => toast.error('Nie udało się pobrać ustawień AI.'));
-        return () => { cancelled.current = true; };
-    }, [authToken, visible]);
+    useEffect(() => () => { cancelled.current = true; }, [visible]);
 
     const loadFile = (file?: File) => {
         if (!file) return;
@@ -81,23 +67,9 @@ export default function BulkImportPanel({ authToken, visible, editing, notice, o
         setDrafts(current => current.map((draft, i) => i === index ? { ...draft, ...patch } : draft));
     };
 
-    const saveSettings = async () => {
-        setConnecting(true); setConnection('');
-        try {
-            const { data } = await axios.put<AiSettings>(`${API_URL}/bulk-ai/settings`, { model: settings.model, instructions: settings.instructions, apiKey: key }, api);
-            setSettings(data); setSavedModel(data.model); setKey(''); toast.success('Zapisano ustawienia AI.');
-        } catch (error) { toast.error(getApiErrorMessage(error, 'Nie udało się zapisać ustawień AI.')); }
-        finally { setConnecting(false); }
-    };
-    const testConnection = async () => {
-        setConnecting(true);
-        try { await axios.post(`${API_URL}/bulk-ai/test`, {}, api); setConnection('Model dostępny · limit analizy niesprawdzony'); }
-        catch (error) { setConnection('Błąd połączenia'); toast.error(getApiErrorMessage(error, 'Połączenie z OpenAI nie działa.')); }
-        finally { setConnecting(false); }
-    };
 
     const analyzeAll = async () => {
-        if (!settings.configured || !drafts.length) return;
+        if (!configured || !drafts.length) return;
         cancelled.current = false; setBusy(true);
         const groupByTemplate: Partial<Record<ImportTemplate, number>> = { pc: 47, monitor: 50, 'laptop-new': 9, ios: 16, android: 16 };
         const catalogs = new Map<number, string[]>();
@@ -160,26 +132,13 @@ export default function BulkImportPanel({ authToken, visible, editing, notice, o
     return <ThemeProvider theme={importTheme}><Box sx={{ color: 'text.primary', bgcolor: 'background.default', maxWidth: 1200, mx: 'auto', px: 2, py: 3, textAlign: 'left' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} gap={1} sx={{ mb: 2 }}>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>Dostawa z CSV</Typography>
-            <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap"><Chip size="small" label={key || (savedModel && settings.model !== savedModel) ? 'Niezapisane zmiany' : connection || (settings.configured ? 'Klucz zapisany' : savedModel ? 'Brak klucza' : 'Odczyt ustawień')} />
-            <Button variant="outlined" onClick={() => setShowSettings(value => !value)} aria-expanded={showSettings}>Połączenie z OpenAI</Button></Stack>
         </Stack>
-        <Collapse in={showSettings}>
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', py: 2, mb: 2 }}>
-                <Stack direction={{ xs: 'column', md: 'row' }} gap={1} sx={{ mb: 1 }}>
-                    <TextField size="small" disabled={connecting} label="Secret key (klucz API)" type="password" value={key} autoComplete="new-password" error={invalidKey} onChange={event => setKey(event.target.value)} InputLabelProps={{ shrink: true }} placeholder={settings.configured ? 'Pozostaw puste, aby zachować klucz' : 'sk-…'} helperText={invalidKey ? 'Potrzebny jest pełny klucz sk-, nie jego zamaskowany podgląd ani identyfikator.' : <>Wklej pełny Secret key, nie Tracking ID ani Project ID. Masz tylko skrót? <a style={{color:'#90caf9'}} href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Utwórz nowy klucz API</a>.</>} sx={{ flex: 2 }} />
-                    <TextField select size="small" disabled={connecting} label="Model do analizy CSV" value={settings.model} onChange={event => setSettings({ ...settings, model: event.target.value })} sx={{ flex: 1 }}>
-                        {Array.from(new Set([...modelOptions, savedModel].filter(Boolean))).map(model => <MenuItem key={model} value={model}>{model}</MenuItem>)}
-                    </TextField>
-                </Stack>
-                <TextField size="small" label="Dodatkowe instrukcje analizy" multiline minRows={2} fullWidth value={settings.instructions} onChange={event => setSettings({ ...settings, instructions: event.target.value })} />
-                <Stack direction="row" gap={1} sx={{ mt: 1 }}><Button variant="contained" disabled={connecting || invalidKey || (!key.trim() && !settings.configured)} onClick={saveSettings}>Zapisz ustawienia</Button><Button onClick={testConnection} disabled={connecting || !settings.configured || !!key || settings.model !== savedModel}>Sprawdź połączenie</Button></Stack>
-            </Box>
-        </Collapse>
+        <AiSettingsPanel authToken={authToken} onConfigured={setConfigured} />
 
         <Stack direction={{ xs: 'column', sm: 'row' }} gap={2} alignItems={{ sm: 'center' }} sx={{ mb: 2 }}>
             <Button variant="outlined" disabled={busy} component="label">Wybierz plik CSV<input hidden disabled={busy} type="file" accept=".csv,text/csv" onChange={event => loadFile(event.target.files?.[0])} /></Button>
             <Typography variant="body2" color="text.secondary">{drafts.length ? `${drafts.length} produktów, ${counts.problems} wymagających uwagi` : 'Nie wybrano pliku'}</Typography>
-            <Button variant="contained" disabled={!settings.configured || !drafts.length || busy} onClick={analyzeAll}>Analizuj całą dostawę</Button>
+            <Button variant="contained" disabled={!configured || !drafts.length || busy} onClick={analyzeAll}>Analizuj całą dostawę</Button>
             {!!drafts.length && <Button component="label" variant="outlined" title="Np. HPC131_1.jpg dla SKU HPC131">Dodaj zdjęcia według SKU
                 <input hidden type="file" multiple accept="image/*" onChange={event => {
                     const { assigned, unmatched } = assignDeliveryPhotos(Array.from(event.target.files || []), drafts.map(d => d.source[mapping.sku] || ''));

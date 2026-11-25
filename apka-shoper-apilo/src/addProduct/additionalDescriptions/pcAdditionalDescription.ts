@@ -1,3 +1,5 @@
+import { templateCopy } from '../../templateCopy';
+
 export const cpuTypesDescriptions = {
     'Intel Core Ultra 5': "Intel Core Ultra 5 sprawdzi się w codziennej pracy z dokumentami, podczas wideokonferencji i przy korzystaniu z kilku aplikacji jednocześnie.",
     'Intel Core Ultra 7': "Intel Core Ultra 7 to propozycja do pracy z rozbudowanymi arkuszami, obróbki zdjęć i uruchamiania kilku wymagających programów jednocześnie.",
@@ -76,7 +78,7 @@ export const cpuTypesDescriptionsSK = {
 
 
 
-const genericAmdDescriptions = {
+export const genericAmdDescriptions = {
     pl: "Procesor AMD nadaje się do codziennych zadań, takich jak praca z dokumentami, pocztą i przeglądarką. Wydajność zależy od konkretnego modelu oraz konfiguracji komputera.",
     cz: "Procesor AMD se hodí pro každodenní úkoly, jako je práce s dokumenty, e-mailem a prohlížečem. Výkon závisí na konkrétním modelu a konfiguraci počítače.",
     sk: "Procesor AMD je vhodný na každodenné úlohy, ako je práca s dokumentmi, e-mailom a prehliadačom. Výkon závisí od konkrétneho modelu a konfigurácie počítača.",
@@ -90,7 +92,10 @@ export const getCpuTypeDescription = (series: string | undefined, language: "pl"
     if (!normalized) return "";
 
     const exactKey = Object.keys(descriptions).find((key) => key.toLowerCase() === normalized.toLowerCase());
-    if (exactKey) return descriptions[exactKey];
+    const resolve = (key: string) => templateCopy('pc', language + ':Procesor:' + key, descriptions[key]);
+    if (exactKey) return resolve(exactKey);
+    const custom = templateCopy('pc', language + ':Procesor:' + normalized, '');
+    if (custom) return custom;
 
     const amdSeries = normalized.replace(/^AMD\s+/i, "");
     const ryzenTier = amdSeries.match(/^Ryzen\s+([3579])\b/i)?.[1];
@@ -98,9 +103,10 @@ export const getCpuTypeDescription = (series: string | undefined, language: "pl"
     const amdKey = ryzenTier ? `AMD Ryzen ${ryzenTier}`
         : /^Ryzen\s+Threadripper\b/i.test(amdSeries) ? "AMD Ryzen Threadripper"
             : /^GX\b/i.test(amdSeries) ? "AMD GX" : aSeries ? `AMD ${aSeries}` : "";
-    if (amdKey) return descriptions[amdKey];
+    if (amdKey) return resolve(amdKey);
 
-    return /^(AMD\b|Ryzen\b|Athlon\b)/i.test(normalized) ? genericAmdDescriptions[language] : "";
+    return /^(AMD\b|Ryzen\b|Athlon\b)/i.test(normalized)
+        ? templateCopy('pc', language + ':Procesor:Pozostałe AMD', genericAmdDescriptions[language]) : "";
 };
 
 export const ramTypesDescriptions = {

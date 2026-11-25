@@ -1,4 +1,4 @@
-export const dellSeriesHtml = `
+export const dellSeriesHtml = () => `
   <h2>⭐ Seria Dell Latitude</h2>
   <p>
     Seria Dell Latitude jest znana jako jedna z najbardziej <b>zaawansowanych i niezawodnych serii</b> laptopów, które są idealne dla profesjonalistów. Zaprojektowane z myślą o pracy w biznesie, szkole, domu i wymagających środowiskach, laptopy z serii Dell Latitude oferują nie tylko wydajność, ale także doskonałą trwałość.
@@ -31,15 +31,6 @@ const formatDiagonal = (value: unknown) => {
   return raw.includes('"') ? raw : `${raw}"`;
 };
 
-const buildScreenSentence = (matrixSize: unknown, resolution: unknown) => {
-  const diagonal = formatDiagonal(matrixSize);
-  const res = formatResolution(resolution);
-  if (!diagonal && !res) return "";
-  if (res) {
-    return `${diagonal} calowy wyświetlacz doskonale nadaje się do oglądania zdjęć lub filmów.`;
-  }
-  return `${diagonal} calowy wyświetlacz doskonale nadaje się do oglądania zdjęć lub filmów.`;
-};
 
 
 export const buildIntroText = (
@@ -58,7 +49,7 @@ export const buildIntroText = (
     ${formatCapacity(ramAmount)} pamięci RAM <b>${ramType}</b>
     ten laptop jest w stanie sprostać nawet najbardziej wymagającym zadaniom.
 
-    ${buildScreenSentence(matrixSize, resolution)}
+    ${formatDiagonal(matrixSize) || formatResolution(resolution) ? `${formatDiagonal(matrixSize)} calowy wyświetlacz doskonale nadaje się do oglądania zdjęć lub filmów.` : ""}
     Ponadto, dzięki eleganckiej i nowoczesnej konstrukcji,
     ten laptop będzie <b>przyciągał wzrok</b> gdziekolwiek się znajdziesz.
 

@@ -1,3 +1,7 @@
+import { allegroOfferError } from '../backendQueries/allegroOfferError';
+import { shoperSaveProgress } from '../backendQueries/shoperErrorMessage';
+import { useProductTitles } from './useProductTitles';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -6,12 +10,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './addProducts.css';
-import { apiloSystemType, getCpuTypeDescription, homeAssistantSupportNotice, desktopStatus, desktopStatusCZ, desktopStatusSK, diskTypesDescriptions, diskTypesDescriptionsCZ, diskTypesDescriptionsSK, ramTypesDescriptions, ramTypesDescriptionsCZ, ramTypesDescriptionsSK, systemType, systemTypeCZ, systemTypeSK } from "./additionalDescriptions/pcAdditionalDescription";
+import { apiloSystemType, getCpuTypeDescription } from "./additionalDescriptions/pcAdditionalDescription";
 import { TextField, Button, Checkbox, FormControlLabel, FormControl, InputLabel, Select, MenuItem, Box, ThemeProvider, Typography, TextareaAutosize, SelectChangeEvent, ListItemText, Autocomplete, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton } from '@mui/material';
 import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import { handleImageUpload } from "../image-host";
-import { additionalTranslationsCZ, additionalTranslationsPL, additionalTranslationsSK, conditionCZ, conditionSK, pcCaseVC_CZ, pcCaseVC_SK, pcVC, vc_CZ, vc_SK } from "./additionalDescriptions/visualConditionDescriptions";
+import { additionalTranslationsCZ, additionalTranslationsPL, additionalTranslationsSK, conditionCZ, conditionSK, vc_CZ, vc_SK } from "./additionalDescriptions/visualConditionDescriptions";
 import { pcTemplateCZ } from "./templatesCZ/pcTemplateCZ";
 import { pcTemplateSK } from "./templatesSK/pcTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
@@ -36,7 +40,7 @@ import { handleGetAttributeList } from "../backendQueries/handleGetAttributeList
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import AllegroParameters from "./allegroComponents/AllegroParameters";
-import { pcNewParameteres } from "../allegroParameters/pcNewParameteres";
+import { useCatalog, withCatalogLabels } from "../allegroParameters/catalog";
 import { AttributeForm } from "./shoperParametersOrder/pcParametersOrder";
 import { ApiloDescription, PcApiloAioSpecyfication, PcApiloSpecyfication, pcTemplateNew } from "./templates/pcTemplateNew";
 import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
@@ -44,7 +48,10 @@ import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
 import { buildWirelessCommunicationSection } from "./templatesAllegro/wirelessCommunicationSection";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
+import { AllegroOfferPreview } from "./allegroComponents/AllegroDescriptionEditor";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 type AddProductProps = {
     authToken: string
@@ -136,12 +143,15 @@ const getCaseDescriptionForType = (caseType: string) =>
         ? "Mała, kompaktowa obudowa"
         : " Łatwa w rozbudowie, pojemna obudowa ";
 function AddPC(props: AddProductProps) {
+    const { fields: pcNewParameteres, synced } = useCatalog('pc');
+    const [{ ramTypesDescriptions, ramTypesDescriptionsCZ, ramTypesDescriptionsSK, diskTypesDescriptions, diskTypesDescriptionsCZ, diskTypesDescriptionsSK, pcVC, pcCaseVC_CZ, pcCaseVC_SK, systemType, systemTypeCZ, systemTypeSK, desktopStatus, desktopStatusCZ, desktopStatusSK, supportNotices }] = useState(() => templateDictionaries('pc'));
+    const homeAssistantSupportNotice = supportNotices['Home Assistant'];
     const { register, handleSubmit, watch, getFieldState, setValue, control, getValues, reset } = useForm<IFormInput>()
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [addToApilo, setAddToApilo] = useState(true);
     const [imageSrc, setImageSrc] = useState<string>("");
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
+    const { nameCZ, nameSK } = titles;
     const [IncludeCZ, setIncludeCZ] = useState("");
     const [IncludeSK, setIncludeSK] = useState("");
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
@@ -170,6 +180,7 @@ function AddPC(props: AddProductProps) {
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const lastUploadKeyRef = useRef<string>("");
     const pauseDescriptionGenerationRef = useRef(false);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const resetRevisionRef = useRef(0);
     const [isImageManagerOpen, setIsImageManagerOpen] = useState(false);
 
@@ -407,9 +418,9 @@ function AddPC(props: AddProductProps) {
             if (pl.active != null) setValue("active", coerceToBoolean(pl.active), { shouldValidate: true, shouldDirty: true });
             if (product?.active != null) setValue("active", coerceToBoolean(product.active), { shouldValidate: true, shouldDirty: true });
 
-            if (cs.name) setNameCZ(cs.name);
+            titles.seed(pl.name, cs.name, sk.name);
             if (cs.description) setValue("descriptionCZ", cs.description, { shouldValidate: true, shouldDirty: true });
-            if (sk.name) setNameSK(sk.name);
+
             if (sk.description) setValue("descriptionSK", sk.description, { shouldValidate: true, shouldDirty: true });
 
             if (product?.code) setValue("SKU", String(product.code), { shouldValidate: true, shouldDirty: true });
@@ -488,10 +499,9 @@ function AddPC(props: AddProductProps) {
     };
 
 
-    const handleAddAllegroOffer = async () => {
-        const localGaugeId = getGaugeIdForCaseType(shoper_caseType);
-        const token = props.accessTokenAllegro
-        const currentName = String(getValues("name") ?? name ?? "").trim();
+    const currentAllegroTitle = () => String(getValues("name") ?? name ?? "").trim();
+
+    const buildOfficeAllegroDescription = (currentName = currentAllegroTitle()) => {
         const extraFeatureItems = renderAdditionalFeatureItems(extraFeatures);
         const allegroSystem = String(formData["System operacyjny"] ?? "");
         const shoperSystemValue = String(shoper_system ?? "").trim();
@@ -586,122 +596,7 @@ function AddPC(props: AddProductProps) {
                     },
                 ],
             };
-        const productData = {
-
-            "productSet":
-                [{
-
-                    "product":
-                    {
-                        id: connectProductAllegro
-                            ? selectedProductId
-                            : "",
-                        "name": currentName,
-                        "category": { "id": "486" },
-                        "idType": "GTIN",         // typ wartości w polu "product.id". 
-                        // Dla GTIN wskaż "GTIN",dla numerów 
-                        // katalogowych nadanych przez producenta - "MPN".
-                        // Jeśli wskazujesz UUID produktu, pozostaw pole puste.
-
-
-                        "parameters": buildOfferParameters(formData, true, pcNewParameteres),
-
-                        "images": imageLinks,
-                    },
-                    "responsibleProducer": {
-                        "type": "ID",                               // typ identyfikatora
-                        "id": responsibleProducerId
-                    },
-                    "safetyInformation": {
-                        "type": "TEXT",
-                        "description": `Lista ostrzeżeń dotyczących bezpieczeństwa komputerów stacjonarnych oparta o wymagania Rozporządzenia (UE) 2023/988 w sprawie ogólnego bezpieczeństwa produktów (GPSR)
-
-                    *   Ryzyko porażenia prądem:
-
-                        *   Upewnij się, że komputer jest podłączony do sprawnego gniazdka z uziemieniem.
-                        *   Nie dotykaj wtyczki ani kabla mokrymi rękami.
-                        *   Unikaj używania komputera w miejscach o dużej wilgotności.
-                    *   Ryzyko przegrzania:
-
-                        *   Zapewnij odpowiednią wentylację, zachowując co najmniej 5 cm wolnej przestrzeni wokół komputera.
-                        *   Nie blokuj otworów wentylacyjnych.
-                    *   Ryzyko pożaru:
-
-                        *   Używaj wyłącznie oryginalnych ładowarek i akcesoriów zalecanych przez producenta.
-                        *   Nie pozostawiaj komputera włączonego bez nadzoru w pobliżu materiałów łatwopalnych.
-                    *   Ryzyko uszkodzeń ciała:
-
-                        *   Używaj komputera na stabilnej powierzchni, aby zminimalizować ryzyko upadku.
-                    *   Zagrożenia w wilgotnym środowisku:
-
-                        *   Nie używaj komputera na zewnątrz podczas deszczu ani w miejscach o dużej wilgotności.
-                        *   W przypadku zalania komputera natychmiast odłącz go od źródła zasilania i skontaktuj się z serwisem.
-                    *   Zagrożenia w wysokich temperaturach:
-
-                        *   Nie eksponuj komputera na bezpośrednie działanie promieni słonecznych.
-                        *   Unikaj korzystania z komputera w temperaturach przekraczających zalecany zakres (zwykle 5-35°C).
-                    *   Ryzyko uszkodzenia podczas czyszczenia:
-
-                        *   Przed czyszczeniem odłącz komputer od zasilania i użyj miękkiej, lekko wilgotnej ściereczki.
-                        *   Unikaj stosowania silnych detergentów mogących uszkodzić powierzchnię komputera.
-                    *   Ostrożność podczas wymiany akcesoriów:
-
-                        *   Korzystaj wyłącznie z akcesoriów zalecanych przez producenta.
-                        *   W przypadku wymiany baterii, przestrzegaj zaleceń producenta i nie wystawiaj baterii na działanie wysokich temperatur.
-                    *   Zagrożenia związane z użytkowaniem baterii:
-
-                        *   Unikaj uszkodzenia baterii przez uderzenia lub jej przebicie.
-                        *   Jeśli bateria się przegrzewa lub puchnie, natychmiast przerwij użytkowanie komputera.
-                    *   Ostrzeżenia dotyczące dzieci:
-
-                        *   Trzymaj kable zasilające poza zasięgiem dzieci.
-                        *   Upewnij się, że dzieci nie bawią się komputerem ani akcesoriami, które mogą być niebezpieczne.`
-                    },
-                }],
-            "sellingMode": {
-                "price": {
-                    "amount": Price,            // cena
-                    "currency": "PLN"
-                }
-            },
-            "stock": {
-                "available": Stock                  // liczba sztuk
-            },
-            "publication": {
-                "status": "INACTIVE",
-            },
-
-            "parameters": [
-                {
-                    "name": "Stan",
-                    "values": [
-                        formData['Stan']
-                    ]
-                }
-            ],
-
-            "external": {
-                "id": SKU
-            },
-
-            "delivery": {
-                "shippingRates": {
-                    name: localGaugeId == 5
-                        ? "KOMPY 2018, DESKTOP DO PACZKOMATU"
-                        : "KOMPY 2018",
-                },
-            },
-
-
-            "afterSalesServices": {
-                "impliedWarranty": {
-                    "name": "Standardowe"
-                },
-                "returnPolicy": {
-                    "name": "15 dni Czechówka"
-                }
-            },
-            "description": {
+        return {
 
                 "sections": [{
                     "items": [{
@@ -821,7 +716,129 @@ function AddPC(props: AddProductProps) {
                     }]
                 }
                 ].filter(Boolean)
-            }
+        };
+    };
+
+    const handleAddAllegroOffer = async () => {
+        const localGaugeId = getGaugeIdForCaseType(shoper_caseType);
+        const token = props.accessTokenAllegro
+        const currentName = currentAllegroTitle();
+        const productData = {
+
+            "productSet":
+                [{
+
+                    "product":
+                    {
+                        id: connectProductAllegro
+                            ? selectedProductId
+                            : "",
+                        "name": currentName,
+                        "category": { "id": "486" },
+                        "idType": "GTIN",         // typ wartości w polu "product.id". 
+                        // Dla GTIN wskaż "GTIN",dla numerów 
+                        // katalogowych nadanych przez producenta - "MPN".
+                        // Jeśli wskazujesz UUID produktu, pozostaw pole puste.
+
+
+                        "parameters": buildOfferParameters(formData, true, pcNewParameteres),
+
+                        "images": imageLinks,
+                    },
+                    "responsibleProducer": {
+                        "type": "ID",                               // typ identyfikatora
+                        "id": responsibleProducerId
+                    },
+                    "safetyInformation": {
+                        "type": "TEXT",
+                        "description": `Lista ostrzeżeń dotyczących bezpieczeństwa komputerów stacjonarnych oparta o wymagania Rozporządzenia (UE) 2023/988 w sprawie ogólnego bezpieczeństwa produktów (GPSR)
+
+                    *   Ryzyko porażenia prądem:
+
+                        *   Upewnij się, że komputer jest podłączony do sprawnego gniazdka z uziemieniem.
+                        *   Nie dotykaj wtyczki ani kabla mokrymi rękami.
+                        *   Unikaj używania komputera w miejscach o dużej wilgotności.
+                    *   Ryzyko przegrzania:
+
+                        *   Zapewnij odpowiednią wentylację, zachowując co najmniej 5 cm wolnej przestrzeni wokół komputera.
+                        *   Nie blokuj otworów wentylacyjnych.
+                    *   Ryzyko pożaru:
+
+                        *   Używaj wyłącznie oryginalnych ładowarek i akcesoriów zalecanych przez producenta.
+                        *   Nie pozostawiaj komputera włączonego bez nadzoru w pobliżu materiałów łatwopalnych.
+                    *   Ryzyko uszkodzeń ciała:
+
+                        *   Używaj komputera na stabilnej powierzchni, aby zminimalizować ryzyko upadku.
+                    *   Zagrożenia w wilgotnym środowisku:
+
+                        *   Nie używaj komputera na zewnątrz podczas deszczu ani w miejscach o dużej wilgotności.
+                        *   W przypadku zalania komputera natychmiast odłącz go od źródła zasilania i skontaktuj się z serwisem.
+                    *   Zagrożenia w wysokich temperaturach:
+
+                        *   Nie eksponuj komputera na bezpośrednie działanie promieni słonecznych.
+                        *   Unikaj korzystania z komputera w temperaturach przekraczających zalecany zakres (zwykle 5-35°C).
+                    *   Ryzyko uszkodzenia podczas czyszczenia:
+
+                        *   Przed czyszczeniem odłącz komputer od zasilania i użyj miękkiej, lekko wilgotnej ściereczki.
+                        *   Unikaj stosowania silnych detergentów mogących uszkodzić powierzchnię komputera.
+                    *   Ostrożność podczas wymiany akcesoriów:
+
+                        *   Korzystaj wyłącznie z akcesoriów zalecanych przez producenta.
+                        *   W przypadku wymiany baterii, przestrzegaj zaleceń producenta i nie wystawiaj baterii na działanie wysokich temperatur.
+                    *   Zagrożenia związane z użytkowaniem baterii:
+
+                        *   Unikaj uszkodzenia baterii przez uderzenia lub jej przebicie.
+                        *   Jeśli bateria się przegrzewa lub puchnie, natychmiast przerwij użytkowanie komputera.
+                    *   Ostrzeżenia dotyczące dzieci:
+
+                        *   Trzymaj kable zasilające poza zasięgiem dzieci.
+                        *   Upewnij się, że dzieci nie bawią się komputerem ani akcesoriami, które mogą być niebezpieczne.`
+                    },
+                }],
+            "sellingMode": {
+                "price": {
+                    "amount": Price,            // cena
+                    "currency": "PLN"
+                }
+            },
+            "stock": {
+                "available": Stock                  // liczba sztuk
+            },
+            "publication": {
+                "status": "INACTIVE",
+            },
+
+            "parameters": synced ? buildOfferParameters(formData, false, pcNewParameteres) : [
+                {
+                    "name": "Stan",
+                    "values": [
+                        formData['Stan']
+                    ]
+                }
+            ],
+
+            "external": {
+                "id": SKU
+            },
+
+            "delivery": {
+                "shippingRates": {
+                    name: localGaugeId == 5
+                        ? "KOMPY 2018, DESKTOP DO PACZKOMATU"
+                        : "KOMPY 2018",
+                },
+            },
+
+
+            "afterSalesServices": {
+                "impliedWarranty": {
+                    "name": "Standardowe"
+                },
+                "returnPolicy": {
+                    "name": "15 dni Czechówka"
+                }
+            },
+            "description": buildOfficeAllegroDescription(currentName),
         };
 
         try {
@@ -840,21 +857,14 @@ function AddPC(props: AddProductProps) {
             setSelectedProduct(undefined);
             setLockedParams(new Set());
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const apiError = error.response?.data;
-
-                console.error("Błąd Allegro:", apiError);
-                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
-            } else {
-                console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił nieznany błąd.");
-            }
+            console.error('Błąd wystawiania na Allegro:', axios.isAxiosError(error) ? error.response?.data : error);
+            toast.error(allegroOfferError(error, pcNewParameteres, productData));
         }
     }
 
     const handleSelectAllegroProduct = (product: Product) => {
         handleSelectAllegroProductUtil({
-            product,
+            product: synced ? withCatalogLabels(product, pcNewParameteres) : product,
             setSelectedProductId,
             setSelectedProduct,
             setLockedParams,
@@ -1059,6 +1069,7 @@ function AddPC(props: AddProductProps) {
     };
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         if (shoper_gpuType == 'zintegrowana') {
             shoper_gpuDescription = "Zintegrowana karta graficzna jest wystarczająca do codziennych zadań, takich jak przeglądanie internetu, oglądanie filmów czy podstawowa edycja grafiki, ale może mieć trudności z obsługą wymagających gier i programów. To ekonomiczne rozwiązanie dla użytkowników, którzy nie potrzebują dużej mocy obliczeniowej w grafice.";
             setGpuDescriptionsCZ("Integrovaná grafická karta je dostačující pro každodenní úkoly, jako je prohlížení internetu, sledování filmů nebo základní úpravy obrázků, ale může mít problémy s náročnými hrami a programy. Jde o ekonomické řešení pro uživatele, kteří nepotřebují vysoký grafický výkon.")
@@ -1070,10 +1081,13 @@ function AddPC(props: AddProductProps) {
 
         //dodaj produkt do shoper
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             if (addToApilo) apiloImageUUIDs = await AddImageApilo(props, selectedImages)
 
-            const response = await AddProductShoper(data, attributes, nameCZ, nameSK, gaugeId, props, '249', relatedPackId || undefined)
+            const response = await AddProductShoper(data, attributes, localized.cs, localized.sk, gaugeId, props, '249', relatedPackId || undefined)
 
+            progress.created(response);
             //dodaj produkt do apilo
             if (addToApilo) {
                 let apiloResponse: ApiloResponse = await AddProductApilo(data, props, apiloImageUUIDs)
@@ -1159,15 +1173,12 @@ function AddPC(props: AddProductProps) {
             toast.success(addToApilo ? "Produkt został dodany do Shopera i Apilo." : "Produkt został dodany do Shopera.");
 
         } catch (error) {
-            const fallbackMessage = addToApilo
-                ? "Nie udało się dodać produktu do Shopera lub Apilo."
-                : "Nie udało się dodać produktu do Shopera.";
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getApiErrorMessage(error, fallbackMessage, attributeList));
+                toast.error(progress.error(error, attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getApiErrorMessage(error, fallbackMessage, attributeList));
+                toast.error(progress.error(error, attributeList));
             }
         };
     }
@@ -1180,6 +1191,8 @@ function AddPC(props: AddProductProps) {
         }
         setUpdatingProduct(true);
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             if (shoper_gpuType == 'zintegrowana') {
                 shoper_gpuDescription = "Zintegrowana karta graficzna jest wystarczająca do codziennych zadań, takich jak przeglądanie internetu, oglądanie filmów czy podstawowa edycja grafiki, ale może mieć trudności z obsługą wymagających gier i programów. To ekonomiczne rozwiązanie dla użytkowników, którzy nie potrzebują dużej mocy obliczeniowej w grafice.";
                 setGpuDescriptionsCZ("Integrovaná grafická karta je dostačující pro každodenní úkoly, jako je prohlížení internetu, sledování filmů nebo základní úpravy obrázků, ale může mít problémy s náročnými hrami a programy. Jde o ekonomické řešení pro uživatele, kteří nepotřebují vysoký grafický výkon.")
@@ -1227,12 +1240,12 @@ function AddPC(props: AddProductProps) {
                         active: data.active,
                     },
                     cs_CZ: {
-                        name: nameCZ,
+                        name: localized.cs,
                         description: data.descriptionCZ,
                         active: data.active,
                     },
                     sk_SK: {
-                        name: nameSK,
+                        name: localized.sk,
                         description: data.descriptionSK,
                         active: data.active,
                     },
@@ -1340,7 +1353,11 @@ function AddPC(props: AddProductProps) {
     let shoper_color = watch(`attribute_${761}`);
 
     let shoper_cpuName = watch(`attribute_${762}`);
-    let shoper_cpuModel = watch(`attribute_${771}`);
+    const rawCpuModel = watch(`attribute_${771}`);
+    const coreSeries = /\bi[3579]$/i.exec(shoper_cpuName ?? '')?.[0];
+    const shoper_cpuModel = coreSeries
+        ? rawCpuModel?.replace(new RegExp(`^(?:Intel\\s+Core\\s+)?${coreSeries}\\s*-\\s*(?=\\d)`, 'i'), '')
+        : rawCpuModel;
     let shoper_cpuClockSpeed = watch(`attribute_${764}`);
     let shoper_cpuMaxClockSpeed = watch(`attribute_${765}`);
     let shoper_cpuCores = watch(`attribute_${769}`);
@@ -1356,7 +1373,9 @@ function AddPC(props: AddProductProps) {
     let shoper_gpuType = watch(`attribute_${1244}`);
 
     let shoper_diskType = watch(`attribute_${773}`);
-    let shoper_diskSize = watch(`attribute_${774}`);
+    const rawDiskSize = watch(`attribute_${774}`);
+    const shoper_diskSize = typeof rawDiskSize === 'string'
+        ? rawDiskSize.replace(/^\s*(\d+(?:[.,]\d+)?)\s*GB\s*$/i, '$1') : rawDiskSize;
 
     let shoper_dvd = watch(`attribute_${775}`);
     let shoper_CasePorts = watch(`attribute_${869}`);
@@ -1478,7 +1497,7 @@ function AddPC(props: AddProductProps) {
         additionalInfoCZ,
         getCpuTypeDescription(shoper_cpuName, "cz"),
         diskTypesDescriptionsCZ[shoper_diskType as keyof typeof diskTypesDescriptionsCZ] ?? "",
-        ramTypesDescriptionsCZ.DDR2,
+        ramTypesDescriptionsCZ[shoper_ramType] ?? "",
         systemTypeCZ[shoper_system as keyof typeof systemType],
         IncludeCZ,
         imageSrc,
@@ -1511,7 +1530,7 @@ function AddPC(props: AddProductProps) {
         additionalInfoSK,
         getCpuTypeDescription(shoper_cpuName, "sk"),
         diskTypesDescriptionsSK[shoper_diskType as keyof typeof diskTypesDescriptionsSK] ?? "",
-        ramTypesDescriptionsSK.DDR2,
+        ramTypesDescriptionsSK[shoper_ramType] ?? "",
         systemTypeSK[shoper_system as keyof typeof systemType],
         IncludeSK,
         imageSrc,
@@ -1544,7 +1563,7 @@ function AddPC(props: AddProductProps) {
         additionalInfo,
         getCpuTypeDescription(shoper_cpuName, "pl"),
         diskTypesDescriptions[shoper_diskType as keyof typeof diskTypesDescriptions] ?? "",
-        ramTypesDescriptions.DDR2,
+        ramTypesDescriptions[shoper_ramType] ?? "",
         systemType[shoper_system as keyof typeof systemType] ?? "",
         included,
         imageSrc,
@@ -1772,8 +1791,7 @@ function AddPC(props: AddProductProps) {
         setIsImageManagerOpen(false);
         setPorts([]);
         setGaugeId(6);
-        setNameCZ("");
-        setNameSK("");
+        titles.seed();
         setIncludeCZ("");
         setIncludeSK("");
         setAdditionalInfoCZ("");
@@ -1799,15 +1817,17 @@ function AddPC(props: AddProductProps) {
 
 
                                 <FormControl fullWidth >
-                                    <InputLabel >język opisu</InputLabel>
+                                    <InputLabel id="office-description-preview-label">Podgląd opisu</InputLabel>
                                     <Select
-                                        label="język opisu"
+                                        labelId="office-description-preview-label"
+                                        label="Podgląd opisu"
                                         {...register("descriptionLanguage")}
                                         defaultValue={"description"}
                                     >
                                         <MenuItem value="description">Polski</MenuItem>
                                         <MenuItem value="descriptionCZ">Czeski</MenuItem>
                                         <MenuItem value="descriptionSK">Słowacki</MenuItem>
+                                        <MenuItem value="descriptionAllegro">Allegro</MenuItem>
 
                                     </Select>
                                 </FormControl>
@@ -1868,21 +1888,7 @@ function AddPC(props: AddProductProps) {
                                     </div>
                                     <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
                                     <TextField InputLabelProps={{ shrink: true }} required label="tytuł" variant="outlined" type="text" inputProps={{ maxLength: 75 }} {...register("name", {
-                                        onBlur: async (e) => {
-                                            const value = e.target.value;
-                                            const revision = resetRevisionRef.current;
-
-                                            try {
-                                                const [translatedCZ, translatedSK] = await Promise.all([handleTranslateCZ(value), handleTranslateSK(value)]);
-                                                if (revision !== resetRevisionRef.current) return;
-                                                setNameCZ(translatedCZ)
-                                                setNameSK(translatedSK)
-                                                toast.success("przetłumaczono");
-                                            } catch (error) {
-                                                console.error("Błąd podczas tłumaczenia:", error);
-                                                toast.error("błąd w tłumaczeniu");
-                                            }
-                                        }
+                                        onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                                     })} />
                                     <TextField defaultValue={1} required label="ilość" InputLabelProps={{ shrink: true }} variant="outlined" type="number"{...register("stock")} />
                                     <TextField required label="cena" InputLabelProps={{ shrink: true }} variant="outlined" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
@@ -2056,6 +2062,7 @@ function AddPC(props: AddProductProps) {
                                     <input
                                         style={{ width: '100%' }}
                                         type="file"
+                                        ref={imageInputRef}
                                         multiple
                                         accept="image/*"
                                         onChange={handleImageChange}
@@ -2079,48 +2086,56 @@ function AddPC(props: AddProductProps) {
                                 )}
 
 
-                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button
-                                    sx={{ fontSize: '15px' }}
-                                    variant="contained"
-                                    type="submit"
-                                    disabled={loading}
-                                >
-                                    {loading ? (
-                                        <>
-                                            <CircularProgress size={18} sx={{ mr: 1 }} />
-                                            Ładowanie…
-                                        </>
-                                    ) : (
-                                        addToApilo ? "Dodaj produkt do Shopera i Apilo" : "Dodaj produkt do Shopera"
-                                    )}
-                                </Button>
-                                </ApiloSubmitControls>
-                                <Button
-                                    sx={{ fontSize: '15px' }}
-                                    variant="contained"
-                                    type="button"
-                                    disabled={loading || updatingProduct}
-                                    onClick={handleSubmit(handleUpdateProduct)}
-                                >
-                                    {updatingProduct ? (
-                                        <>
-                                            <CircularProgress size={18} sx={{ mr: 1 }} />
-                                            Aktualizowanie…
-                                        </>
-                                    ) : (
-                                        "Zaktualizuj produkt"
-                                    )}
-                                </Button>
-                                <Button disabled={loading} sx={{ fontSize: '15px' }} variant="contained" onClick={handleAddAllegroOffer}>                                    {loading ? (
-                                    <>
-                                        <CircularProgress size={18} sx={{ mr: 1 }} />
-                                        Ładowanie…
-                                    </>
-                                ) : (
-                                    "Dodaj produkt do Allegro"
-                                )}</Button>
-                                <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleResetShoperForm} />
+                                <TemplateActionBar onAddPhotos={() => imageInputRef.current?.click()}
+                                    photoCount={selectedImages.length} onManagePhotos={() => setIsImageManagerOpen(true)}>
+                                    <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleResetShoperForm} />
+                                    <FormAssistant template="pc" token={props.authToken} control={control} attributes={attributeList}
+                                        read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                                        write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
+                                        allegro={{ catalog: pcNewParameteres, values: formData, write: handleChangeAllegro, locked: isParamDisabled }} />
+                                    <Button disabled={loading} sx={{ fontSize: "15px" }} variant="contained" onClick={handleAddAllegroOffer}>
+                                        {" "}
+                                        {loading ? (
+                                            <>
+                                                <CircularProgress size={18} sx={{ mr: 1 }} />
+                                                Ładowanie…
+                                            </>
+                                        ) : (
+                                            "+ Allegro"
+                                        )}
+                                    </Button>
+                                    <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                        <Button sx={{ fontSize: "15px" }} variant="contained" color="success" type="submit" disabled={loading}>
+                                            {loading ? (
+                                                <>
+                                                    <CircularProgress size={18} sx={{ mr: 1 }} />
+                                                    Ładowanie…
+                                                </>
+                                            ) : addToApilo ? (
+                                                "+ Shoper, Apilo"
+                                            ) : (
+                                                "+ Shoper"
+                                            )}
+                                        </Button>
+                                    </ApiloSubmitControls>
+                                    <Button
+                                        sx={{ fontSize: "15px" }}
+                                        variant="contained"
+                                        color="warning"
+                                        type="button"
+                                        disabled={loading || updatingProduct}
+                                        onClick={handleSubmit(handleUpdateProduct)}
+                                    >
+                                        {updatingProduct ? (
+                                            <>
+                                                <CircularProgress size={18} sx={{ mr: 1 }} />
+                                                Aktualizowanie…
+                                            </>
+                                        ) : (
+                                            "Aktualizuj Shoper"
+                                        )}
+                                    </Button>
+                                </TemplateActionBar>
                             </ThemeProvider>
                         </Box>
                     </form>
@@ -2241,6 +2256,9 @@ function AddPC(props: AddProductProps) {
                 </Dialog>
 
                 <div className="preview">
+                    {descriptionLanguage === "descriptionAllegro" && (
+                        <AllegroOfferPreview description={buildOfficeAllegroDescription()} />
+                    )}
                     {descriptionLanguage === 'description' && (
                         <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
                     )}

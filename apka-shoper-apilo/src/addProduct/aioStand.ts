@@ -1,6 +1,7 @@
+import { templateCopy } from '../templateCopy';
 type AioStandLocale = "pl" | "cz" | "sk";
 
-const labels: Record<string, Record<AioStandLocale, string>> = {
+export const aioStandLabels: Record<string, Record<AioStandLocale, string>> = {
     oryginalna: { pl: "oryginalna", cz: "originální", sk: "originálna" },
     zastępcza: { pl: "zastępcza", cz: "náhradní", sk: "náhradná" },
     brak: {
@@ -10,5 +11,7 @@ const labels: Record<string, Record<AioStandLocale, string>> = {
     },
 };
 
-export const getAioStandDescription = (value: string, locale: AioStandLocale): string =>
-    labels[String(value ?? "").trim().toLocaleLowerCase("pl-PL")]?.[locale] ?? "";
+export const getAioStandDescription = (value: string, locale: AioStandLocale): string => {
+    const key = String(value ?? "").trim().toLocaleLowerCase("pl-PL");
+    return templateCopy('pc', locale + ':Podstawka AIO:' + key, aioStandLabels[key]?.[locale] ?? "");
+};

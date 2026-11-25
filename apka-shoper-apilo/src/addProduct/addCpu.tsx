@@ -1,3 +1,4 @@
+import { useProductTitles } from './useProductTitles';
 import { TemplateResetButton } from './TemplateResetButton';
 import axios from "axios";
 import { useForm, SubmitHandler } from "react-hook-form";
@@ -30,8 +31,9 @@ import draftToHtml from "draftjs-to-html";
 import { API_URL } from "../config";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
 
 type AddProductProps = {
     authToken: string;
@@ -96,8 +98,7 @@ function AddCpu(props: AddProductProps) {
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [attributeGroup, setAttributeGroup] = useState<any>(null);
     const [producer, setProducer] = useState<ProducersResource[]>([]);
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
     const [descriptionCZ, setDescriptionCZ] = useState("");
     const [descriptionSK, setDescriptionSK] = useState("");
     const [relatedPackId, setRelatedPackId] = useState("");
@@ -239,8 +240,11 @@ function AddCpu(props: AddProductProps) {
     };
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         try {
             setLoading(true);
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
 
             // Dodaj zdjęcia do apilo
             if (addToApilo) try {
@@ -262,7 +266,7 @@ function AddCpu(props: AddProductProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
 
             // Zbieranie atrybutów
@@ -308,12 +312,12 @@ function AddCpu(props: AddProductProps) {
                                 active: data.active,
                             },
                             cs_CZ: {
-                                name: nameCZ,
+                                name: localized.cs,
                                 description: translatedCZ,
                                 active: data.active,
                             },
                             sk_SK: {
-                                name: nameSK,
+                                name: localized.sk,
                                 description: translatedSK,
                                 active: data.active,
                             },
@@ -340,6 +344,7 @@ function AddCpu(props: AddProductProps) {
                 toast.error(getShoperErrorMessage(error, attributeList));
                 return;
             }
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -363,7 +368,6 @@ function AddCpu(props: AddProductProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -391,9 +395,6 @@ function AddCpu(props: AddProductProps) {
             );
 
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
 
             // Dodawanie zdjęć produktu
@@ -418,18 +419,21 @@ function AddCpu(props: AddProductProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error, attributeList));
+                toast.error(progress.error(error, attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getShoperErrorMessage(error, attributeList));
+                toast.error(progress.error(error, attributeList));
             }
         } finally {
             setLoading(false);
@@ -446,18 +450,7 @@ function AddCpu(props: AddProductProps) {
                         <h2>Dodaj produkt</h2>
                         <FormControlLabel control={<Checkbox defaultChecked {...register("active")} />} label="aktywność" />
                         <TextField label="Tytuł" type="text"{...register("name", {
-                            onBlur: async (e) => {
-                                const value = e.target.value;
-
-                                try {
-                                    setNameCZ(await handleTranslateCZ(value))
-                                    setNameSK(await handleTranslateSK(value))
-                                    toast.success("przetłumaczono");
-                                } catch (error) {
-                                    console.error("Błąd podczas tłumaczenia:", error);
-                                    toast.error("błąd w tłumaczeniu");
-                                }
-                            }
+                            onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                         })} />
                         <TextField required label="SKU" {...register("SKU")} />
                         <TextField required label="Ilość" type="number"{...register("stock")} />
@@ -574,12 +567,17 @@ function AddCpu(props: AddProductProps) {
                         })}
 
                         <ProductImageManager {...images} />
-                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                            <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                        </ApiloSubmitControls>
+                        <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                            photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                            <TemplateResetButton disabled={loading} />
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                    {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                </Button>
+                            </ApiloSubmitControls>
+                        </TemplateActionBar>
                     </ThemeProvider>
                 </Box>
-                <TemplateResetButton disabled={loading} />
             </form>
             <div className="preview">
                 <div style={{ backgroundColor: 'white', color: 'black', lineHeight: "0.8", padding: '20px' }}>

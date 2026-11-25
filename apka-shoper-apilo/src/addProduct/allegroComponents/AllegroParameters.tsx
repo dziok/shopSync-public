@@ -139,7 +139,7 @@ function ParamField({
     const maxLength = getMaxLengthForParam(param.name);
 
     return (
-        <Box key={param.id} sx={{ opacity: disabled ? 0.7 : 1, mb: 1.5, width: '25vw' }}>
+        <Box key={param.id} data-ai-allegro={param.id} sx={{ opacity: disabled ? 0.7 : 1, mb: 1.5, width: '25vw' }}>
             {param.type === "dictionary" && param.dictionary && (
                 <FormControl fullWidth required={param.required} disabled={disabled} sx={{ width: 'inherit' }}>
                     <InputLabel>{param.name}</InputLabel>

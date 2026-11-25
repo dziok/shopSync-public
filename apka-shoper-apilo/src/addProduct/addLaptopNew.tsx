@@ -1,3 +1,6 @@
+import { allegroOfferError } from '../backendQueries/allegroOfferError';
+import { useProductTitles } from './useProductTitles';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -10,11 +13,9 @@ import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
 import { handleImageUpload } from "../image-host";
-import { batteryDescription, GradeDescriptios, keyboardDescription, matrixGradeDescriptios } from "./templates/laptopTemplate";
 import { LaptopTemplateApilo } from "./templates/laptopTemplate-apilo";
 import { LaptopTemplateCZ } from "./templatesCZ/laptopTemplateCZ";
 import { LaptopTemplateSK } from "./templatesSK/laptopTemplateSK";
-import { batteryDescriptionCZ, batteryDescriptionSK, GradeDescriptionsCZ, GradeDescriptionsSK, keyboardDescriptionCZ, keyboardDescriptionSK, matrixGradeDescriptiosCZ, matrixGradeDescriptiosSK } from "./additionalDescriptions/visualConditionDescriptions";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
 import { LaptopAttributes_CZ, LaptopAttributes_SK } from "./additionalDescriptions/attributesTranslations";
 import { LaptopTemplateNew } from "./templates/laptopTemplateNew";
@@ -22,13 +23,15 @@ import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroCompone
 import { Product, SearchResult, FormData, Attribute, ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { AddImageApilo } from "../backendQueries/addImageApilo";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import AllegroParameters from "./allegroComponents/AllegroLaptopParameters";
 import { resolveImportedShoperAttribute } from "./allegroComponents/importShoperAttribute";
 import { ShoperImportedFieldStyles, shoperFieldWasProvided, shoperImportedAttributeNames, useShoperImportedFields } from "./shoperImportedFields";
-import { laptopParametersAllegro } from "../allegroParameters/laptopParameters";
+import { useCatalog, withCatalogLabels } from "../allegroParameters/catalog";
 
 import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
 import { handleSelectAllegroLaptop as handleSelectAllegroLaptopUtil } from "./allegroComponents/selectAllegroProductLaptop";
@@ -110,6 +113,8 @@ const ensureSectionIds = (sections: any[]) =>
     sections.map(sec => ({ ...sec, id: (sec as any).id || generateSectionId() }));
 
 function AddLaptopNew(props: AddProductProps) {
+    const { fields: laptopParametersAllegro, synced } = useCatalog('laptop-new');
+    const [{ matrixGradeDescriptios, matrixGradeDescriptiosCZ, matrixGradeDescriptiosSK, GradeDescriptios, GradeDescriptionsCZ, GradeDescriptionsSK, batteryDescription, batteryDescriptionCZ, batteryDescriptionSK, keyboardDescription, keyboardDescriptionCZ, keyboardDescriptionSK }] = useState(() => templateDictionaries('laptop-new'));
     // *** STANY KOMPONENTU ***
     // Podstawowe dane produktu i listy
     const [producers, setProducers] = useState<ProducersResource[]>([]);
@@ -118,8 +123,7 @@ function AddLaptopNew(props: AddProductProps) {
     const [categories, setCategories] = useState<CategoryResource[]>([]);
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     // Przechowywanie przetłumaczonych nazw i dodatkowych opisów (PL -> CZ/SK)
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
     const [additinalKeyboardInfoCZ, setAdditinalKeyboardInfoCZ] = useState("");
     const [additinalKeyboardInfoSK, setAdditinalKeyboardInfoSK] = useState("");
     const [additinalMatrixInfoCZ, setAdditinalMatrixInfoCZ] = useState("");
@@ -159,7 +163,6 @@ function AddLaptopNew(props: AddProductProps) {
     const [imageSlot, setImageSlot] = useState<{ sectionIndex: number; itemIndex: number; } | null>(null);
     const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
     const [removedAutoSections, setRemovedAutoSections] = useState<Set<string>>(new Set());
-    const translatedTitleSourceRef = useRef("");
 
 
 
@@ -739,32 +742,6 @@ function AddLaptopNew(props: AddProductProps) {
         }
     }, []);
 
-    const ensureTranslatedTitlesForName = useCallback(async (title: string, forceRefresh = false) => {
-        const normalizedTitle = String(title ?? "").trim();
-        if (!normalizedTitle) {
-            setNameCZ("");
-            setNameSK("");
-            translatedTitleSourceRef.current = "";
-            return { cz: "", sk: "" };
-        }
-
-        const canReuseExistingTranslations =
-            !forceRefresh &&
-            translatedTitleSourceRef.current === normalizedTitle &&
-            nameCZ.trim() !== "" &&
-            nameSK.trim() !== "";
-
-        if (canReuseExistingTranslations) {
-            return { cz: nameCZ, sk: nameSK };
-        }
-
-        const translatedCZ = await handleTranslateCZ(normalizedTitle);
-        const translatedSK = await handleTranslateSK(normalizedTitle);
-        setNameCZ(translatedCZ);
-        setNameSK(translatedSK);
-        translatedTitleSourceRef.current = normalizedTitle;
-        return { cz: translatedCZ, sk: translatedSK };
-    }, [nameCZ, nameSK]);
 
     const textAttributeHandlers = useMemo(() => ({
         [normalizeAttributeName("Dodatkowy opis klawiatury")]: (value: string) =>
@@ -1069,11 +1046,10 @@ function AddLaptopNew(props: AddProductProps) {
             if (pl.active != null) setValue("active", coerceToBoolean(pl.active), { shouldValidate: true, shouldDirty: true });
             if (product?.active != null) setValue("active", coerceToBoolean(product.active), { shouldValidate: true, shouldDirty: true });
 
-            setNameCZ(cs.name ?? "");
+            titles.seed(pl.name, cs.name, sk.name);
             if (cs.description) setValue("descriptionCZ", cs.description, { shouldValidate: true, shouldDirty: true });
-            setNameSK(sk.name ?? "");
+
             if (sk.description) setValue("descriptionSK", sk.description, { shouldValidate: true, shouldDirty: true });
-            translatedTitleSourceRef.current = typeof pl.name === "string" ? pl.name.trim() : "";
 
             if (product?.code) setValue("SKU", String(product.code), { shouldValidate: true, shouldDirty: true });
             if (product?.producer_id) setValue("producer", Number(product.producer_id), { shouldValidate: true, shouldDirty: true });
@@ -1347,7 +1323,7 @@ function AddLaptopNew(props: AddProductProps) {
             publication: {
                 status: "INACTIVE"
             },
-            parameters: [
+            parameters: synced ? buildOfferParameters(formData, false, laptopParametersAllegro) : [
                 { name: "Stan", values: [formData["Stan"]] }
             ],
             external: { id: getValues("SKU") },
@@ -1368,14 +1344,8 @@ function AddLaptopNew(props: AddProductProps) {
             setSelectedProductId(null);
             toast.success("Dodano produkt do Allegro");
         } catch (error: any) {
-            if (axios.isAxiosError(error)) {
-                const apiError = error.response?.data;
-                console.error("Błąd Allegro:", apiError);
-                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
-            } else {
-                console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił nieznany błąd podczas dodawania na Allegro.");
-            }
+            console.error('Błąd wystawiania na Allegro:', axios.isAxiosError(error) ? error.response?.data : error);
+            toast.error(allegroOfferError(error, laptopParametersAllegro, productData));
         }
     };
 
@@ -1505,7 +1475,7 @@ function AddLaptopNew(props: AddProductProps) {
     // Wybór produktu z wyników wyszukiwania Allegro (ustawienie parametrów z produktu)
     const handleSelectAllegroLaptop = (product: Product) => {
         handleSelectAllegroLaptopUtil({
-            product,
+            product: synced ? withCatalogLabels(product, laptopParametersAllegro) : product,
             setSelectedProductId,
             setSelectedProduct,
             setLockedParams,
@@ -1774,6 +1744,7 @@ function AddLaptopNew(props: AddProductProps) {
 
     // === SUBMIT (DODAWANIE PRODUKTU DO SHOPER + APILO) ===
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         const attributesPayload = buildLegacyLocalizedAttributesPayload(data, buildAttributesPayload(data));
         const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
         const safetyCertificateIds = Array.isArray(data.productSafetyCertificateIds)
@@ -1789,17 +1760,8 @@ function AddLaptopNew(props: AddProductProps) {
         if (safetyProducerId) safetyInformation.gpsr_producer_id = safetyProducerId;
         if (safetyCertificateIds.length) safetyInformation.gpsr_certificates = safetyCertificateIds;
         try {
-            let translatedTitleCZ = nameCZ;
-            let translatedTitleSK = nameSK;
-            try {
-                const translatedTitles = await ensureTranslatedTitlesForName(data.name);
-                translatedTitleCZ = translatedTitles.cz;
-                translatedTitleSK = translatedTitles.sk;
-            } catch (error) {
-                console.error("Błąd tłumaczenia tytułu podczas dodawania:", error);
-                toast.error("Błąd tłumaczenia tytułu");
-                return;
-            }
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
 
             // Dodawanie produktu do Shoper
             const shoperResponse = await axios.post(`${API_URL}/product/shoper`, {
@@ -1831,17 +1793,18 @@ function AddLaptopNew(props: AddProductProps) {
                 headers: { Authorization: `Bearer ${props.authToken}` }
             });
 
+            progress.created(shoperResponse.data);
             const newProductId = shoperResponse.data;
             // Dodanie tłumaczeń opisu (CZ, SK) oraz ustawienie atrybutów tłumaczonych
             await axios.put(`${API_URL}/product/${newProductId}`, {
                 translations: {
                     cs_CZ: {
-                        name: translatedTitleCZ,
+                        name: localized.cs,
                         description: data.descriptionCZ,
                         active: data.active,
                     },
                     sk_SK: {
-                        name: translatedTitleSK,
+                        name: localized.sk,
                         description: data.descriptionSK,
                         active: data.active,
                     },
@@ -1872,7 +1835,7 @@ function AddLaptopNew(props: AddProductProps) {
                     });
                 } catch (err) {
                     console.error("Błąd dodawania zdjęcia:", err);
-                    toast.error("Błąd podczas dodawania zdjęcia");
+                    throw err;
                 }
             }
 
@@ -1909,7 +1872,7 @@ function AddLaptopNew(props: AddProductProps) {
             toast.success(`Produkt ${newProductId} został pomyślnie dodany.`);
         } catch (error: any) {
             console.error("Błąd dodawania produktu:", error.response?.data || error);
-            toast.error(getShoperErrorMessage(error, attributeList));
+            toast.error(progress.error(error, attributeList));
         }
     };
 
@@ -1921,17 +1884,8 @@ function AddLaptopNew(props: AddProductProps) {
         }
         setUpdatingProduct(true);
         try {
-            let translatedTitleCZ = nameCZ;
-            let translatedTitleSK = nameSK;
-            try {
-                const translatedTitles = await ensureTranslatedTitlesForName(data.name);
-                translatedTitleCZ = translatedTitles.cz;
-                translatedTitleSK = translatedTitles.sk;
-            } catch (error) {
-                console.error("Błąd tłumaczenia tytułu podczas aktualizacji:", error);
-                toast.error("Błąd tłumaczenia tytułu");
-                return;
-            }
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
 
             const attributesPayload = buildLegacyLocalizedAttributesPayload(data, buildAttributesPayload(data));
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
@@ -1975,12 +1929,12 @@ function AddLaptopNew(props: AddProductProps) {
                         active: data.active,
                     },
                     cs_CZ: {
-                        name: translatedTitleCZ,
+                        name: localized.cs,
                         description: data.descriptionCZ,
                         active: data.active,
                     },
                     sk_SK: {
-                        name: translatedTitleSK,
+                        name: localized.sk,
                         description: data.descriptionSK,
                         active: data.active,
                     },
@@ -2781,74 +2735,39 @@ function AddLaptopNew(props: AddProductProps) {
     return (
         <div className="addProductMainContainer">
             <Box sx={{ display: 'flex', flexDirection: 'column', pb: 10 }}>
-                <Box
-                    sx={{
-                        position: "fixed",
-                        bottom: 16,
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        zIndex: 20,
-                        width: "fit-content",
-                        display: "flex",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Box
-                        sx={{
-                            display: "flex",
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 1.5,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            px: 2,
-                            py: 1.5,
-                            borderRadius: 2,
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            backgroundColor: "rgba(20, 23, 33, 0.75)",
-                            backdropFilter: "blur(6px)",
-                        }}
-                    >
-                        <Button
-                            disabled={loading}
-                            variant="contained"
-                            onClick={handleAddAllegroOffer}
-                        >
-                            {loading ? (
-                                <>
-                                    <CircularProgress size={18} sx={{ mr: 1 }} />
-                                    Ładowanie…
-                                </>
-                            ) : (
-                                "Dodaj produkt do Allegro"
-                            )}
+                <TemplateActionBar onAddPhotos={() => imageInputRef.current?.click()}
+                    photoCount={selectedImages.length} onManagePhotos={() => setIsImageManagerOpen(true)}>
+                    <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleReset} />
+                    <FormAssistant template="laptop-new" token={props.authToken} control={control} attributes={attributeList}
+                        read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                        write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
+                        allegro={{ catalog: laptopParametersAllegro, values: formData, write: (key,value)=>setFormData(prev=>({...prev,[key]:value})), locked: isParamDisabled }} />
+                    <Button disabled={loading} variant="contained" onClick={handleAddAllegroOffer}>
+                        {loading ? (
+                            <>
+                                <CircularProgress size={18} sx={{ mr: 1 }} />
+                                Ładowanie…
+                            </>
+                        ) : (
+                            "+ Allegro"
+                        )}
+                    </Button>
+                    <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                        <Button variant="contained" color="success" onClick={handleSubmit(onSubmit)}>
+                            {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
                         </Button>
-                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                        <Button
-                            variant="contained"
-                            color="success"
-                            onClick={handleSubmit(onSubmit)}
-                        >
-                            {addToApilo ? "Dodaj (Shoper + Apilo)" : "Dodaj do Shopera"}
-                        </Button>
-                        </ApiloSubmitControls>
-                        <Button
-                            variant="contained"
-                            color="warning"
-                            disabled={updatingProduct}
-                            onClick={handleSubmit(handleUpdateProduct)}
-                        >
-                            {updatingProduct ? (
-                                <>
-                                    <CircularProgress size={18} sx={{ mr: 1 }} />
-                                    Aktualizowanie…
-                                </>
-                            ) : (
-                                "Zaktualizuj Shoper"
-                            )}
-                        </Button>
-                    </Box>
-                </Box>
+                    </ApiloSubmitControls>
+                    <Button variant="contained" color="warning" disabled={updatingProduct} onClick={handleSubmit(handleUpdateProduct)}>
+                        {updatingProduct ? (
+                            <>
+                                <CircularProgress size={18} sx={{ mr: 1 }} />
+                                Aktualizowanie…
+                            </>
+                        ) : (
+                            "Aktualizuj Shoper"
+                        )}
+                    </Button>
+                </TemplateActionBar>
                 {/* Formularz dodawania produktu */}
                 <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
                     <ShoperImportedFieldStyles fields={importedFields} />
@@ -2927,16 +2846,7 @@ function AddLaptopNew(props: AddProductProps) {
                                 type="text"
                                 InputLabelProps={{ shrink: true }}
                                 {...register("name", {
-                                    onBlur: async (e) => {
-                                        const value = e.target.value;
-                                        try {
-                                            await ensureTranslatedTitlesForName(value, true);
-                                            toast.success("Przetłumaczono tytuł (CZ/SK)");
-                                        } catch (error) {
-                                            console.error("Błąd podczas tłumaczenia tytułu:", error);
-                                            toast.error("Błąd tłumaczenia tytułu");
-                                        }
-                                    }
+                                    onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                                 })}
                             />
 
@@ -3210,7 +3120,6 @@ function AddLaptopNew(props: AddProductProps) {
                                 </Box>
                             )}
 
-                            <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleReset} />
                         </ThemeProvider>
                     </Box>
                 </form>
@@ -3297,7 +3206,7 @@ function AddLaptopNew(props: AddProductProps) {
                                         <InputLabel id="lap_series">Seria laptopa</InputLabel>
                                         <Select labelId="lap_series" label="Seria laptopa" {...field}>
                                             <MenuItem value="">Brak</MenuItem>
-                                            <MenuItem value={dellSeriesHtml}>Dell Latitude (opis serii)</MenuItem>
+                                            <MenuItem value={dellSeriesHtml()}>Dell Latitude (opis serii)</MenuItem>
                                         </Select>
                                     </FormControl>
                                 )}

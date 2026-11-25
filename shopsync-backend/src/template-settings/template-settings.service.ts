@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { CatalogSnapshot, validateCatalog } from './allegro-catalog';
 
 export const TEMPLATE_KEYS = [
   'pc', 'gaming', 'monitor', 'custom', 'damaged-laptop',
@@ -27,10 +28,11 @@ export type BlockRule = {
 };
 export type TextReplacement = { id: string; label?: string; find: LocalizedText; text: LocalizedText };
 export type TemplateSettings = {
+  aiInstructions?: string;
   shoper: { categoryId: number | null; gaugeId: number | null; deliveryId: number | null; gfxId: number | null; pkwiu: string };
   apilo: { tax: number | null; status: number | null };
-  allegro: { shippingRatesName: string; returnPolicyName: string; warrantyName: string };
-  description: { before: LocalizedText; after: LocalizedText; rules: DescriptionRule[]; replacements: TextReplacement[]; blocks: Record<string, BlockRule> };
+  allegro: { shippingRatesName: string; returnPolicyName: string; warrantyName: string; parameterCatalog?: CatalogSnapshot };
+  description: { copy?: Record<string, string>; before: LocalizedText; after: LocalizedText; rules: DescriptionRule[]; replacements: TextReplacement[]; blocks: Record<string, BlockRule> };
 };
 export type TemplateSettingsFile = {
   revision: number;
@@ -64,7 +66,7 @@ const normalizeLocalized = (value: unknown): LocalizedText => {
   return { pl: text(input.pl, 5000), cz: text(input.cz, 5000), sk: text(input.sk, 5000) };
 };
 
-export function normalizeTemplateSettings(value: unknown): TemplateSettings {
+export function normalizeTemplateSettings(value: unknown, key?: string): TemplateSettings {
   const input = object(value);
   const shoper = object(input.shoper);
   const apilo = object(input.apilo);
@@ -73,10 +75,16 @@ export function normalizeTemplateSettings(value: unknown): TemplateSettings {
   const rules = Array.isArray(description.rules) ? description.rules : [];
   const replacements = Array.isArray(description.replacements) ? description.replacements : [];
   const blocks = Object.entries(object(description.blocks));
+  if (description.copy !== undefined && (!description.copy || typeof description.copy !== 'object' || Array.isArray(description.copy))) {
+    throw new BadRequestException('Nieprawidłowa lista opisów.');
+  }
+  const copy = Object.entries(object(description.copy));
+  if (copy.length > 5000) throw new BadRequestException('Zbyt wiele opisów.');
   if (rules.length > 200 || replacements.length > 200) throw new BadRequestException('Too many description entries.');
   if (blocks.length > 100) throw new BadRequestException('Too many block rules.');
 
   return {
+    aiInstructions: text(input.aiInstructions ?? (key === 'pc' ? 'W polach tekstowych Shopera podawaj pojemność dysku w GB bez jednostki (512 zamiast 512 GB). Serię i model procesora wpisuj osobno: Intel Core i5 oraz 8500 zamiast i5-8500. W polach wyboru zachowaj dokładne wartości dostępnych opcji.' : ''), 4000),
     shoper: {
       categoryId: numberOrNull(shoper.categoryId), gaugeId: numberOrNull(shoper.gaugeId),
       deliveryId: numberOrNull(shoper.deliveryId), gfxId: numberOrNull(shoper.gfxId),
@@ -87,8 +95,15 @@ export function normalizeTemplateSettings(value: unknown): TemplateSettings {
       shippingRatesName: text(allegro.shippingRatesName, 120),
       returnPolicyName: text(allegro.returnPolicyName, 120),
       warrantyName: text(allegro.warrantyName, 120),
+      ...(allegro.parameterCatalog !== undefined && { parameterCatalog: validateCatalog(allegro.parameterCatalog, key) }),
     },
     description: {
+      ...(copy.length > 0 && { copy: Object.fromEntries(copy.map(([key, value]) => {
+        if (!/^(pl|cz|sk):[^<>\x00-\x1f]{1,220}$/u.test(key) || typeof value !== 'string' || value.length > 12000) {
+          throw new BadRequestException('Nieprawidłowy klucz lub długość opisu.');
+        }
+        return [key, value];
+      })) }),
       before: normalizeLocalized(description.before), after: normalizeLocalized(description.after),
       rules: rules.map((raw: unknown) => {
         const rule = object(raw);
@@ -142,7 +157,7 @@ export class TemplateSettingsService {
     return {
       revision: 1,
       updatedAt: new Date().toISOString(),
-      templates: Object.fromEntries(TEMPLATE_KEYS.map((key) => [key, emptyTemplate()])) as Record<TemplateKey, TemplateSettings>,
+      templates: Object.fromEntries(TEMPLATE_KEYS.map((key) => [key, normalizeTemplateSettings(emptyTemplate(), key)])) as Record<TemplateKey, TemplateSettings>,
     };
   }
 
@@ -160,14 +175,14 @@ export class TemplateSettingsService {
       revision: Number(parsed.revision) || 1,
       updatedAt: String(parsed.updatedAt || defaults.updatedAt),
       templates: Object.fromEntries(TEMPLATE_KEYS.map((key) => [
-        key, normalizeTemplateSettings(parsed.templates?.[key] ?? defaults.templates[key]),
+        key, normalizeTemplateSettings(parsed.templates?.[key] ?? defaults.templates[key], key),
       ])) as Record<TemplateKey, TemplateSettings>,
     };
   }
 
   save(key: string, input: unknown, expectedRevision: number) {
     if (!TEMPLATE_KEYS.includes(key as TemplateKey)) throw new BadRequestException('Unknown template.');
-    const settings = normalizeTemplateSettings(input);
+    const settings = normalizeTemplateSettings(input, key);
     const saveOperation = this.pending.then(async () => {
       const current = await this.getSettings();
       if (current.revision !== expectedRevision) return { conflict: true, settings: current };

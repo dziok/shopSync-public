@@ -98,9 +98,6 @@ export const LaptopTemplateNew = (
                         <li>To dysk półprzewodnikowy, dzięki niemu laptop działa znacznie szybciej. W odróżnieniu od
                             klasycznych dysków HDD nie ma ruchomych części, dlatego też działa niezwykle cicho i sprawia
                             że laptop zużywa mniej energii.</li>
-                        <li>To dysk półprzewodnikowy, dzięki niemu laptop działa znacznie szybciej. W odróżnieniu od
-                            klasycznych dysków HDD nie ma ruchomych części, dlatego też działa niezwykle cicho i sprawia
-                            że laptop zużywa mniej energii.</li>
                     </ul>
                 <br>
                     <p style="text-align: left !important" class="laptop_p2">*dane na podstawie testów przykładowych dysków</p>

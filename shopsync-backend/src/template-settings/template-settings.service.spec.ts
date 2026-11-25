@@ -31,6 +31,8 @@ describe('TemplateSettingsService', () => {
   });
 
   it('rejects invalid identifiers and HTML in replacement search text', () => {
+    expect(() => normalizeTemplateSettings({ description: { copy: { 'bad': 'x' } } })).toThrow(BadRequestException);
+    expect(() => normalizeTemplateSettings({ description: { copy: { 'pl:Stan:A': 1 } } })).toThrow(BadRequestException);
     expect(() => normalizeTemplateSettings({ shoper: { categoryId: -1 } })).toThrow(BadRequestException);
     expect(() => normalizeTemplateSettings({ description: {
       rules: [{ field: 'attribute', attributeId: 'bad', match: 'equals', value: 'x' }],
@@ -51,6 +53,7 @@ describe('TemplateSettingsService', () => {
       (service as any).filePath = filePath;
       const initial = await service.getSettings();
       const saved = await service.save('pc', { shoper: { categoryId: 321 }, description: {
+        copy: { 'pl:Procesor:AMD A4': 'Opis A4', 'cz:RAM:DDR3': '' },
         blocks: { photo: { mode: 'hide', field: 'attribute', match: 'equals' } },
       } }, initial.revision);
       expect(saved.conflict).toBe(false);
@@ -60,6 +63,8 @@ describe('TemplateSettingsService', () => {
       (reloaded as any).filePath = filePath;
       expect((await reloaded.getSettings()).templates.pc.shoper.categoryId).toBe(321);
       expect((await reloaded.getSettings()).templates.pc.description.blocks.photo.mode).toBe('hide');
+      expect((await reloaded.getSettings()).templates.pc.description.copy).toEqual({ 'pl:Procesor:AMD A4': 'Opis A4', 'cz:RAM:DDR3': '' });
+      expect((await reloaded.getSettings()).templates.gaming.description.copy).toBeUndefined();
       const stale = await reloaded.save('gaming', { shoper: { categoryId: 223 } }, initial.revision);
       expect(stale.conflict).toBe(true);
       expect((await reloaded.getSettings()).templates.gaming.shoper.categoryId).toBeNull();

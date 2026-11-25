@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/auth.guard';
 import { DecodedAuthTokens } from '../decorators';
 import { JwtPayload } from '../auth/auth.dto';
 import { AuthService } from '../auth/auth.service';
+import { catalogCategory, validateCatalog } from '../template-settings/allegro-catalog';
 
 @Controller('product')
 export class ProductController {
@@ -161,6 +162,15 @@ export class ProductController {
   ) {
     const token = authHeader.replace('Bearer ', '');
     return this.productService.getCategoryParameters(token, categoryId);
+  }
+
+  @Get('template-parameters/:key')
+  @UseGuards(JwtAuthGuard)
+  async templateParameters(@Param('key') key: string, @Query('allegroAccountId') accountId?: string) {
+    const categoryId = catalogCategory(key);
+    const token = await this.authService.getAllegroProdAccessToken(accountId || undefined);
+    const data = await this.productService.getCategoryParameters(token, categoryId);
+    return validateCatalog({ categoryId, fetchedAt: new Date().toISOString(), parameters: data?.parameters }, key);
   }
 
   @Get('search')

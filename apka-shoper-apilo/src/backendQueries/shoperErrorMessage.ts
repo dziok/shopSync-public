@@ -22,6 +22,8 @@ const collectMessages = (value: unknown): string[] => {
     if (typeof value !== "object") return [String(value)];
 
     const objectValue = value as Record<string, unknown>;
+    const nested = collectMessages(objectValue.errors);
+    if (nested.length) return nested;
     const descriptiveMessages = [
         objectValue.userMessage,
         objectValue.error_description,
@@ -50,7 +52,7 @@ const collectMessages = (value: unknown): string[] => {
 
 export const getShoperErrorMessage = (error: unknown, attributes: readonly NamedShoperAttribute[] = []) => {
     if (!axios.isAxiosError(error)) {
-        return "Wystąpił błąd podczas dodawania produktu do Shopera.";
+        return error instanceof Error ? error.message : "Wystąpił błąd podczas dodawania produktu do Shopera.";
     }
 
     if (!error.response) {
@@ -72,3 +74,14 @@ export const getShoperErrorMessage = (error: unknown, attributes: readonly Named
         ? `${namedMessage.slice(0, MAX_MESSAGE_LENGTH)}...`
         : namedMessage;
 };
+
+export function shoperSaveProgress() {
+    let id: unknown;
+    return {
+        created(productId: unknown) { id = productId; },
+        error(error: unknown, attributes: readonly NamedShoperAttribute[] = []) {
+            const detail = getShoperErrorMessage(error, attributes);
+            return id == null ? detail : `Produkt już utworzono w Shoperze (ID ${id}). Nie dodawaj go ponownie. Nie ukończono wszystkich kroków: ${detail}`;
+        },
+    };
+}

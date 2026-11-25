@@ -1,4 +1,5 @@
 import { getTemplateBlockCatalog } from "./templateBlocks";
+import type { CatalogSnapshot } from "./allegroParameters/catalog";
 
 export const TEMPLATE_NAMES = {
     pc: "Komputery biurowe",
@@ -33,10 +34,11 @@ export type BlockRule = {
 };
 export type TextReplacement = { id: string; label?: string; find: LocalizedText; text: LocalizedText };
 export type TemplateSettings = {
+    aiInstructions?: string;
     shoper: { categoryId: number | null; gaugeId: number | null; deliveryId: number | null; gfxId: number | null; pkwiu: string };
     apilo: { tax: number | null; status: number | null };
-    allegro: { shippingRatesName: string; returnPolicyName: string; warrantyName: string };
-    description: { before: LocalizedText; after: LocalizedText; rules: DescriptionRule[]; replacements: TextReplacement[]; blocks: Record<string, BlockRule> };
+    allegro: { shippingRatesName: string; returnPolicyName: string; warrantyName: string; parameterCatalog?: CatalogSnapshot };
+    description: { copy?: Record<string, string>; before: LocalizedText; after: LocalizedText; rules: DescriptionRule[]; replacements: TextReplacement[]; blocks: Record<string, BlockRule> };
 };
 export type TemplateSettingsFile = {
     revision: number;

@@ -11,7 +11,7 @@ export const buildOfferParameters = (formData: FormDataAllegro, describesProduct
 
         const paramId = String(paramDef.id);
 
-        if (paramDef.type === 'dictionary' && paramDef.dictionary) {
+        if ((paramDef.type === 'dictionary' || paramDef.type === 'dictionary_ac') && paramDef.dictionary) {
             const dictionary = paramDef.dictionary;
 
             if (Array.isArray(value)) {

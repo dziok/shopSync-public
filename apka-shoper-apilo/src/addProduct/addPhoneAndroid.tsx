@@ -1,3 +1,5 @@
+import { useProductTitles } from './useProductTitles';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -10,7 +12,7 @@ import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
 import { ProductImageManager, useProductImages } from "./productImageManager";
-import { monitorVC, monitorVC_CZ, monitorVC_SK, pcVC } from "./additionalDescriptions/visualConditionDescriptions";
+import { pcVC } from "./additionalDescriptions/visualConditionDescriptions";
 import { systemType } from "./additionalDescriptions/pcAdditionalDescription";
 import { AndroidTemplate } from "./templates/androidTemplate";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
@@ -20,7 +22,7 @@ import { ProductSafetyCertificateResource, ProductSafetyProducerResource } from 
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { AddImageShoper } from "../backendQueries/addImageShoper";
@@ -29,6 +31,8 @@ import { phoneDescriptionSignature, phoneOfferFormAttributes, phoneOfferGroupIds
 import { ShoperImportedFieldStyles, shoperFieldWasProvided, useShoperImportedFields } from "./shoperImportedFields";
 import { PhoneAdditionalShoperFields, PhoneGroupPicker, PhoneShoperSelect, usePhoneAvailableGroups, usePhoneCategoryGroups, usePhoneShoperAttributes } from "./phoneShoperFields";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 type AddphoneIOSProps = {
     authToken: string,
@@ -100,6 +104,7 @@ interface ProducersResource {
 }
 let deviceType = ""
 function AddPhoneAndroid(props: AddphoneIOSProps) {
+    const [{ monitorVC, monitorVC_CZ, monitorVC_SK }] = useState(() => templateDictionaries('android'));
     const { formState: { isSubmitting }, register, handleSubmit, watch, getFieldState, setValue, getValues, reset, control } = useForm<IFormInput>()
     const images = useProductImages();
     const { selectedImages, setSelectedImages, imageLinks, setImageLinks } = images;
@@ -110,8 +115,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
     const [productSafetyCertificates, setProductSafetyCertificates] = useState<ProductSafetyCertificateResource[]>([]);
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
     const [additionalInfoSK, setAdditionalInfoSK] = useState("");
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
     const [relatedPackId, setRelatedPackId] = useState("");
     const [shoperOfferId, setShoperOfferId] = useState("");
     const [loadedOfferId, setLoadedOfferId] = useState<number | null>(null);
@@ -290,8 +294,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
             setSelectedImages([]);
             setImageLinks([]);
             setRelatedPackId("");
-            setNameCZ("");
-            setNameSK("");
+            titles.seed();
             setAdditionalInfoCZ("");
             setAdditionalInfoSK("");
             const translations = product.translations as Record<string, any> | undefined;
@@ -303,8 +306,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
             const stock = product.stock as Record<string, unknown> | undefined;
             if (stock?.price != null) setValue("price", Number(stock.price));
             if (stock?.stock != null) setValue("stock", Number(stock.stock));
-            if (translations?.cs_CZ?.name != null) setNameCZ(String(translations.cs_CZ.name));
-            if (translations?.sk_SK?.name != null) setNameSK(String(translations.sk_SK.name));
+            titles.seed(pl?.name, translations?.cs_CZ?.name, translations?.sk_SK?.name);
             const safety = product.safety_information as Record<string, unknown> | undefined;
             const producerId = normalizeIdValue(safety?.gpsr_producer_id ?? product.product_safety_producer_id);
             if (typeof producerId === "number") setValue("productSafetyProducerId", producerId);
@@ -390,6 +392,8 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
         }
         setUpdatingProduct(true);
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             const original = pendingOffer?.id === loadedOfferId ? pendingOffer.product : null;
             const originalStock = original?.stock as Record<string, unknown> | undefined;
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId);
@@ -412,8 +416,8 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                 },
                 translations: {
                     pl_PL: { name: data.name, description: data.description, active: data.active },
-                    ...(data.descriptionCZ ? { cs_CZ: { name: nameCZ || data.name, description: data.descriptionCZ, active: data.active } } : {}),
-                    ...(data.descriptionSK ? { sk_SK: { name: nameSK || data.name, description: data.descriptionSK, active: data.active } } : {}),
+                    ...(data.descriptionCZ ? { cs_CZ: { name: localized.cs, description: data.descriptionCZ, active: data.active } } : {}),
+                    ...(data.descriptionSK ? { sk_SK: { name: localized.sk, description: data.descriptionSK, active: data.active } } : {}),
                 },
                 props,
             });
@@ -427,7 +431,10 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
 
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             if (categoryGroups.loading || phoneAttributes.loading || phoneAttributes.error || !phoneAttributes.attributes.length ||
                 (!hasCategoryAttributeGroup && !manualAttributeGroupId)) {
                 throw new Error(phoneAttributes.error || "Wybierz grupę atrybutów kategorii i poczekaj na pobranie atrybutów Shoper.");
@@ -453,17 +460,8 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
-            // try {
-            //     setNameCZ(await handleTranslateCZ(data.name))
-            //     setNameSK(await handleTranslateSK(data.name))
-            //     console.log(nameCZ);
-            //     toast.success("przetłumaczono");
-            // } catch (error) {
-            //     console.error("Błąd podczas tłumaczenia:", error);
-            //     toast.error("błąd w tłumaczeniu");
-            // }
 
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
             const safetyCertificateIds = Array.isArray(data.productSafetyCertificateIds)
@@ -485,12 +483,12 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                         active: data.active
                     },
                     cs_CZ: {
-                        name: nameCZ,
+                        name: localized.cs,
                         description: data.descriptionCZ,
                         active: data.active
                     },
                     sk_SK: {
-                        name: nameSK,
+                        name: localized.sk,
                         description: data.descriptionSK,
                         active: data.active
                     },
@@ -513,6 +511,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     Authorization: `Bearer ${props.authToken}`
                 }
             });
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -536,7 +535,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -615,9 +613,6 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     }
                 });
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -640,18 +635,21 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error, phoneAttributes.attributes));
+                toast.error(progress.error(error, phoneAttributes.attributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(error instanceof Error ? error.message : getShoperErrorMessage(error, phoneAttributes.attributes));
+                toast.error(progress.error(error, phoneAttributes.attributes));
             }
 
         };
@@ -868,18 +866,7 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             <TextField label="Ilość" type="number" InputLabelProps={{ shrink: true }} {...register("stock")} />
                             <TextField label="Cena" type="number" inputProps={{ step: "0.01" }} InputLabelProps={{ shrink: true }} {...register("price")} />
                             <TextField label="Tytuł" type="text" InputLabelProps={{ shrink: true }} {...register("name", {
-                                onBlur: async (e) => {
-                                    const value = e.target.value;
-
-                                    try {
-                                        setNameCZ(await handleTranslateCZ(value))
-                                        setNameSK(await handleTranslateSK(value))
-                                        toast.success("przetłumaczono");
-                                    } catch (error) {
-                                        console.error("Błąd podczas tłumaczenia:", error);
-                                        toast.error("błąd w tłumaczeniu");
-                                    }
-                                }
+                                onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                             })} />
                             <PhoneShoperSelect control={control} attributes={phoneAttributes.attributes} field="model" label="Model" />
 
@@ -1075,14 +1062,28 @@ function AddPhoneAndroid(props: AddphoneIOSProps) {
                             <textarea defaultValue={AndroidTemplateSK('', false, false, false, false, false, "", "", '', '', '', false, false, false, '', '', '')}  {...register("descriptionSK")} />
                             <ProductImageManager {...images} />
 
-                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
-                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                            </ApiloSubmitControls>
-                            <Button variant="outlined" type="button" disabled={!loadedOfferId || updatingProduct || loadingShoperOffer || !images.imagesReady || images.uploadingImages}
-                                onClick={handleSubmit(handleUpdateProduct)}>
-                                {updatingProduct ? "Aktualizowanie..." : "Zaktualizuj produkt Shoper"}
-                            </Button>
+                            <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                                photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                                <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct} />
+                                <FormAssistant template="android" token={props.authToken} control={control} attributes={phoneAttributes.attributes}
+                                    attributesPending={categoryGroups.loading || phoneAttributes.loading} attributesError={phoneAttributes.error}
+                                    read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                                    write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })} />
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                    <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                        {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                    </Button>
+                                </ApiloSubmitControls>
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    type="button"
+                                    disabled={!loadedOfferId || updatingProduct || loadingShoperOffer || !images.imagesReady || images.uploadingImages}
+                                    onClick={handleSubmit(handleUpdateProduct)}
+                                >
+                                    {updatingProduct ? "Aktualizowanie..." : "Aktualizuj Shoper"}
+                                </Button>
+                            </TemplateActionBar>
                         </ThemeProvider>
                     </Box>
                 </form>

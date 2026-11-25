@@ -1,3 +1,6 @@
+import { allegroOfferError } from '../backendQueries/allegroOfferError';
+import { useProductTitles } from './useProductTitles';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -11,7 +14,7 @@ import { API_URL } from "../config";
 import { monitorApiloTemplate1, monitorApiloTemplate2, monitorTemplate } from "./templates/monitorTemplate";
 import './addProducts.css';
 import { ProductImageManager, useProductImages } from "./productImageManager";
-import { monitorCaseVC, monitorCaseVC_CZ, monitorCaseVC_SK, monitorVC, monitorVC_CZ, monitorVC_SK, stand_CZ, stand_SK, vc_CZ, vc_SK } from "./additionalDescriptions/visualConditionDescriptions";
+import { stand_CZ, stand_SK, vc_CZ, vc_SK } from "./additionalDescriptions/visualConditionDescriptions";
 import { monitorTemplateCZ } from "./templatesCZ/monitorTemplateCZ";
 import { monitorTemplateSK } from "./templatesSK/monitorTemplateSK";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
@@ -24,7 +27,7 @@ import { handleGetAttributeList } from "../backendQueries/handleGetAttributeList
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { AddImageShoper } from "../backendQueries/addImageShoper";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
 import React from "react";
 import AllegroMonitorParameters from "./allegroComponents/AllegroLaptopParameters";
@@ -36,8 +39,10 @@ import { buildMonitorAllegroDescription } from "./templatesAllegro/monitorAllegr
 import type { Template, TemplateItem, TemplateSection } from "./templatesAllegro/allegroDescriptionTemplate";
 import AllegroDescriptionEditor, { AllegroDescriptionPreview } from "./allegroComponents/AllegroDescriptionEditor";
 import AllegroSearchResults from "./allegroComponents/searchProductAllegroResoult";
-import { monitorParametersAllegro } from "../allegroParameters/monitorParameters";
+import { type CatalogField, useCatalog, withCatalogLabels } from "../allegroParameters/catalog";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 const ALLEGRO_MONITOR_CATEGORY_ID = "260041";
 const ALLEGRO_MONITOR_IMAGE_LIMIT = 16;
@@ -91,6 +96,7 @@ interface IFormInput {
 }
 
 function AddMonitor(props: AddMonitorProps) {
+    const [{ monitorVC, monitorVC_CZ, monitorVC_SK, monitorCaseVC, monitorCaseVC_CZ, monitorCaseVC_SK }] = useState(() => templateDictionaries('monitor'));
     const MONITOR_ATTRIBUTE_GROUP_ID = "50"; // ID grupy atrybutów monitorów w Shoper
     const BASE_ATTRIBUTE_GROUP_ID = "16"; // ID grupy atrybutów bazowych (Stan/Gwarancja)
     const [portsListString, setPortsListString] = useState("");
@@ -98,8 +104,8 @@ function AddMonitor(props: AddMonitorProps) {
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
+    const { nameCZ, nameSK } = titles;
     const [additionalInfoCZ, setAdditionalInfoCZ] = useState("");
     const [additionalInfoSK, setAdditionalInfoSK] = useState("");
     const [extraFeaturesCZ, setExtraFeaturesCZ] = useState("");
@@ -134,7 +140,7 @@ function AddMonitor(props: AddMonitorProps) {
     const [addingAllegroOffer, setAddingAllegroOffer] = useState(false);
     const [allegroTemplate, setAllegroTemplate] = useState<Template>({ sections: [] });
     const [removedAutoSections, setRemovedAutoSections] = useState<Set<string>>(new Set());
-    const monitorAllegroParameters = monitorParametersAllegro;
+    const { fields: monitorAllegroParameters, synced } = useCatalog('monitor');
 
     const allAttributes = useMemo(() => {
         const byId = new Map<number, Attribute>();
@@ -209,7 +215,7 @@ function AddMonitor(props: AddMonitorProps) {
 
     const getImportedParameterValue = (
         parameter: ProductParameter,
-        definition?: ProductParameter,
+        definition?: CatalogField,
     ): string | string[] | null => {
         const parameterType = definition?.type ?? parameter.type;
         if (Array.isArray(parameter.valuesLabels) && parameter.valuesLabels.length > 0) {
@@ -480,9 +486,9 @@ function AddMonitor(props: AddMonitorProps) {
             if (pl.description) setValue("description", pl.description, { shouldDirty: true });
             const importedExtraFeatures = readAdditionalFeaturesFromDescription(pl.description, ".monitor_extra_features");
             if (product?.active != null) setValue("active", shoperEnabled(product.active), { shouldDirty: true });
-            if (cs.name) setNameCZ(cs.name);
+            titles.seed(pl.name, cs.name, sk.name);
             if (cs.description) setValue("descriptionCZ", cs.description, { shouldDirty: true });
-            if (sk.name) setNameSK(sk.name);
+
             if (sk.description) setValue("descriptionSK", sk.description, { shouldDirty: true });
             if (product?.code) setValue("SKU", String(product.code), { shouldDirty: true });
             const producerId =
@@ -624,7 +630,8 @@ function AddMonitor(props: AddMonitorProps) {
         }
     };
 
-    const handleSelectAllegroMonitor = (product: Product) => {
+    const handleSelectAllegroMonitor = (selected: Product) => {
+        const product = synced ? withCatalogLabels(selected, monitorAllegroParameters) : selected;
         const definitionsById = new Map(
             monitorAllegroParameters.map((parameter) => [String(parameter.id), parameter]),
         );
@@ -879,6 +886,7 @@ function AddMonitor(props: AddMonitorProps) {
     };
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         const category = getMonitorCategoryId(diagonal);
         if (category == null) {
             toast.error("Nie udało się ustalić kategorii monitora na podstawie przekątnej ekranu.");
@@ -886,6 +894,8 @@ function AddMonitor(props: AddMonitorProps) {
         }
 
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             //dodaj zdjęcia do apilo
             if (addToApilo) try {
                 // Pętla po wszystkich obrazach
@@ -914,7 +924,7 @@ function AddMonitor(props: AddMonitorProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
             const safetyProducerId = normalizeIdValue(data.productSafetyProducerId) ?? 0;
             const safetyCertificateIds = Array.isArray(data.productSafetyCertificateIds)
@@ -936,12 +946,12 @@ function AddMonitor(props: AddMonitorProps) {
                         active: data.active
                     },
                     cs_CZ: {
-                        name: nameCZ,
+                        name: localized.cs,
                         description: descriptionCZ,
                         active: data.active,
                     },
                     sk_SK: {
-                        name: nameSK,
+                        name: localized.sk,
                         description: descriptionSK,
                         active: data.active,
                     },
@@ -965,6 +975,7 @@ function AddMonitor(props: AddMonitorProps) {
 
                 }
             });
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -988,7 +999,6 @@ function AddMonitor(props: AddMonitorProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -1092,7 +1102,6 @@ function AddMonitor(props: AddMonitorProps) {
                         });
                     } catch (error) {
                         console.error("Image upload error:", error);
-                        toast.error("Błąd podczas dodawania zdjęcia");
                         throw error;
                     }
                 }
@@ -1100,17 +1109,18 @@ function AddMonitor(props: AddMonitorProps) {
             if (selectedImages.length > 0) {
                 await uploadImages();
             }
+
+
             toast.success(addToApilo
                 ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
                 : `Produkt ${response.data} został dodany do Shopera.`);
-
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error, allAttributes));
+                toast.error(progress.error(error, allAttributes));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getShoperErrorMessage(error, allAttributes));
+                toast.error(progress.error(error, allAttributes));
             }
 
         };
@@ -1125,6 +1135,8 @@ function AddMonitor(props: AddMonitorProps) {
         }
         setUpdatingProduct(true);
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             const category = getMonitorCategoryId(diagonal);
             if (category == null) {
                 toast.error("Nie udało się ustalić kategorii monitora na podstawie przekątnej ekranu.");
@@ -1165,12 +1177,12 @@ function AddMonitor(props: AddMonitorProps) {
                         active: data.active,
                     },
                     cs_CZ: {
-                        name: nameCZ,
+                        name: localized.cs,
                         description: data.descriptionCZ,
                         active: data.active,
                     },
                     sk_SK: {
-                        name: nameSK,
+                        name: localized.sk,
                         description: data.descriptionSK,
                         active: data.active,
                     },
@@ -1487,7 +1499,7 @@ function AddMonitor(props: AddMonitorProps) {
             pivot,
         };
 
-        const matchDictionaryValue = (parameter: ProductParameter, rawValue: unknown) => {
+        const matchDictionaryValue = (parameter: CatalogField, rawValue: unknown) => {
             const dictionary = Array.isArray(parameter.dictionary) ? parameter.dictionary : [];
             if (!dictionary.length) return rawValue;
             const rawItems = Array.isArray(rawValue)
@@ -1677,19 +1689,8 @@ function AddMonitor(props: AddMonitorProps) {
             });
             toast.success("Utworzono nieaktywny szkic monitora na Allegro.");
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const apiError = error.response?.data;
-                const allegroError = apiError?.errors?.[0];
-                const message = allegroError?.userMessage
-                    || allegroError?.message
-                    || apiError?.message
-                    || error.message;
-                console.error("Błąd wystawiania monitora na Allegro:", apiError);
-                toast.error(`Błąd Allegro: ${message}`);
-            } else {
-                console.error("Błąd aplikacji podczas wystawiania monitora:", error);
-                toast.error("Nie udało się utworzyć szkicu na Allegro.");
-            }
+            console.error('Błąd wystawiania na Allegro:', axios.isAxiosError(error) ? error.response?.data : error);
+            toast.error(allegroOfferError(error, monitorAllegroParameters, productData));
         } finally {
             setAddingAllegroOffer(false);
         }
@@ -1841,13 +1842,14 @@ function AddMonitor(props: AddMonitorProps) {
     return (
         <>
             <div className="addProductMainContainer">
-                <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="shoper-import-form" style={{ display: 'flex', flexDirection: 'column', width: '25vw' }}>
                     <ShoperImportedFieldStyles fields={importedFields} />
                     <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                     <Box
                         sx={{ py: 2, display: 'grid', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}
                     >
                         <ThemeProvider theme={MainTheme}>
+                            <form id="monitor-shoper-form" style={{ display: 'contents' }} onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)}>
                             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr auto' }, gap: 2, alignItems: 'center' }}>
                                 <TextField
                                     label="ID aukcji Shoper"
@@ -1921,18 +1923,7 @@ function AddMonitor(props: AddMonitorProps) {
                             <h2>Dodaj monitor</h2>
                             <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="Aktywność" />
                             <TextField label="Tytuł" type="text"{...register("name", {
-                                onBlur: async (e) => {
-                                    const value = e.target.value;
-
-                                    try {
-                                        setNameCZ(await handleTranslateCZ(value))
-                                        setNameSK(await handleTranslateSK(value))
-                                        toast.success("przetłumaczono");
-                                    } catch (error) {
-                                        console.error("Błąd podczas tłumaczenia:", error);
-                                        toast.error("błąd w tłumaczeniu");
-                                    }
-                                }
+                                onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                             })} />
                             <Controller
                                 name="producer"
@@ -2098,6 +2089,7 @@ function AddMonitor(props: AddMonitorProps) {
                             <FormControlLabel control={<Checkbox  {...register("frame")} />} label="ultra cienka ramka" />
                             <FormControlLabel control={<Checkbox  {...register("design")} />} label="nowoczesny design" />
                             <ProductImageManager {...images} />
+                            </form>
 
                             <Box
                                 sx={{
@@ -2155,40 +2147,41 @@ function AddMonitor(props: AddMonitorProps) {
                                     />
                                 )}
 
+                            </Box>
+
+                            <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                                photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                                <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct || addingAllegroOffer} />
+                                <FormAssistant template="monitor" token={props.authToken} control={control} attributes={allAttributes}
+                                    read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                                    write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
+                                    allegro={{ catalog: monitorAllegroParameters, values: allegroFormData, write: (key,value)=>setAllegroFormData(prev=>({...prev,[key]:value})), locked: key => connectProductAllegro && lockedParams.has(key) }} />
                                 <Button
                                     type="button"
                                     variant="contained"
-                                    color="success"
+                                    color="primary"
                                     onClick={handleAddAllegroOffer}
-                                    disabled={
-                                        !props.accessTokenAllegro
-                                        || loadingAllegroData
-                                        || addingAllegroOffer
-                                        || !images.imagesReady
-                                        || images.uploadingImages
-                                    }
+                                    disabled={!props.accessTokenAllegro || loadingAllegroData || addingAllegroOffer || !images.imagesReady || images.uploadingImages}
                                 >
-                                    {addingAllegroOffer
-                                        ? "Tworzenie szkicu…"
-                                        : "Wystaw monitor na Allegro"}
+                                    {addingAllegroOffer ? "Tworzenie szkicu…" : "+ Allegro"}
                                 </Button>
-                            </Box>
-
-                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages || loadingShoperOffer || updatingProduct || addingAllegroOffer} />
-                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                            </ApiloSubmitControls>
-                            <Button
-                                variant="contained"
-                                color="warning"
-                                onClick={handleSubmit(handleUpdateProduct)}
-                                disabled={updatingProduct || !images.imagesReady || images.uploadingImages}
-                            >
-                                {updatingProduct ? "Aktualizowanie..." : "Aktualizuj w Shoperze"}
-                            </Button>
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                    <Button variant="contained" color="success" type="submit" form="monitor-shoper-form" disabled={!images.imagesReady || images.uploadingImages}>
+                                        {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                    </Button>
+                                </ApiloSubmitControls>
+                                <Button
+                                    variant="contained"
+                                    color="warning"
+                                    onClick={handleSubmit(handleUpdateProduct)}
+                                    disabled={updatingProduct || !images.imagesReady || images.uploadingImages}
+                                >
+                                    {updatingProduct ? "Aktualizowanie..." : "Aktualizuj Shoper"}
+                                </Button>
+                            </TemplateActionBar>
                         </ThemeProvider>
                     </Box>
-                </form>
+                </div>
                 {descriptionLanguage === "descriptionAllegro" ? (
                     <AllegroDescriptionEditor
                         template={allegroTemplate}

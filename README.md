@@ -66,3 +66,9 @@ The **Dostawa CSV** tab imports up to 500 rows (5 MB), detects a likely template
 Enter prices in the delivery table. Attach photos per item, or select photos for the delivery using SKU-prefixed filenames (for example `HPC131_01.jpg`). Open an item and select **Uzupełnij formularz** to review it in the existing product template. CSV facts and AI suggestions populate supported fields; select values must match the loaded options. Ambiguous values and failed diagnostics need operator review. A row without a quantity column represents one unit. Delivery data and staged photos stay in memory until reload or logout.
 
 Publication still requires confirmation per product using the channels supported by its template. Opening a draft does not publish it. Form-only edits are not saved back to the delivery table.
+
+## Editing listing descriptions
+
+In **Ustawienia szablonów → Opisy → Treść szablonu**, select a language, group and option. Edits take effect in newly generated descriptions after **Zapisz zmiany**. Restore an individual default with **Przywróć domyślny opis**. Published products are not changed automatically. The **Inne produkty** template uses an editable starting description because its product text is composed by the operator.
+
+Option dictionaries are registered in `src/templateDescriptionCatalog.ts` in the frontend. A rich option, such as a Windows description with a list, is edited as one HTML block. Previous paragraph edits are included when opening the block. Edited HTML is sanitized before use; plain-text options stay plain text. Separately, the Vite plugin in `build/template-copy.mjs` indexes literal text inside dynamic listing generators without exposing their code or product values. Settings store only overrides, separately for each template and language; existing text replacement and visibility rules remain available.

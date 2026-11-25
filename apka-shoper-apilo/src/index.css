@@ -76,6 +76,6 @@ button:focus-visible {
 
 
 
-.AddOfferFormContainer>*>* {
+.AddOfferFormContainer>*>*, .AddOfferFormContainer form > * {
   max-width: 25vw;
 }

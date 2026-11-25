@@ -4,6 +4,8 @@ import { handleImageUpload } from "../image-host";
 import { appendUniqueImages, imageFileKey, moveImageItem } from "./productImageOrder";
 
 export function useProductImages() {
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const [managerOpen, setManagerOpen] = useState(false);
     const [selectedImages, setSelectedImages] = useState<File[]>([]);
     const [imageLinks, setImageLinks] = useState<string[]>([]);
     const [uploadingImages, setUploadingImages] = useState(false);
@@ -66,10 +68,13 @@ export function useProductImages() {
 
     const retryImages = () => setUploadAttempt(previous => previous + 1);
 
-    return { selectedImages, setSelectedImages, imageLinks, setImageLinks, uploadingImages, imagesReady, addImages, moveImage, removeImage, clearImages, retryImages };
+    return { managerOpen, setManagerOpen, imageInputRef, selectedImages, setSelectedImages, imageLinks, setImageLinks, uploadingImages, imagesReady, addImages, moveImage, removeImage, clearImages, retryImages };
 }
 
 type ImageManagerProps = {
+    managerOpen: boolean;
+    setManagerOpen: (value: boolean) => void;
+    imageInputRef: React.RefObject<HTMLInputElement>;
     selectedImages: File[];
     uploadingImages: boolean;
     imagesReady: boolean;
@@ -80,8 +85,7 @@ type ImageManagerProps = {
     retryImages: () => void;
 };
 
-export function ProductImageManager({ selectedImages, uploadingImages, imagesReady, addImages, moveImage, removeImage, clearImages, retryImages }: ImageManagerProps) {
-    const [open, setOpen] = useState(false);
+export function ProductImageManager({ managerOpen: open, setManagerOpen: setOpen, imageInputRef, selectedImages, uploadingImages, imagesReady, addImages, moveImage, removeImage, clearImages, retryImages }: ImageManagerProps) {
     const [previews, setPreviews] = useState<string[]>([]);
     const draggedIndex = useRef<number | null>(null);
 
@@ -108,7 +112,7 @@ export function ProductImageManager({ selectedImages, uploadingImages, imagesRea
         <Box sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 1, p: 2, display: "grid", gap: 1, justifyItems: "start" }}>
             <Button variant="outlined" component="label">
                 Dodaj zdjęcia
-                <input type="file" multiple accept="image/*" hidden onChange={onFileChange} />
+                <input ref={imageInputRef} type="file" multiple accept="image/*" hidden onChange={onFileChange} />
             </Button>
             <Typography variant="body2" color="text.secondary">
                 {uploadingImages ? "Przesyłanie zdjęć..." : selectedImages.length ? `Wybrano zdjęć: ${selectedImages.length}` : "Wybierz zdjęcia lub przeciągnij pliki"}

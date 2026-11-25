@@ -1072,6 +1072,7 @@ export class ProductService {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/vnd.allegro.public.v1+json",
               Accept: "application/vnd.allegro.public.v1+json",
+              "Accept-Language": "pl-PL",
             },
             this.getAllegroUserAgent(),
           ),
@@ -1133,9 +1134,11 @@ export class ProductService {
       const response = await axios.get(
         `https://api.allegro.pl/sale/categories/${categoryId}/parameters`,
         {
+          timeout: 20000,
           headers: withAllegroUserAgent(
             {
               Authorization: `Bearer ${token}`,
+              "Accept-Language": "pl-PL",
               Accept: "application/vnd.allegro.public.v1+json",
             },
             this.getAllegroUserAgent(),
@@ -1148,7 +1151,11 @@ export class ProductService {
         "Błąd pobierania parametrów kategorii:",
         error.response?.data || error.message,
       );
-      throw new Error("Nie udało się pobrać parametrów kategorii z Allegro.");
+      const status = error.response?.status;
+      const reason = status === 401 || status === 403 ? "Sprawdź połączenie wybranego konta Allegro."
+        : status === 429 ? "Limit zapytań Allegro. Spróbuj ponownie później."
+        : "Spróbuj ponownie później.";
+      throw new HttpException(`Nie udało się pobrać parametrów kategorii ${categoryId}. ${reason}`, HttpStatus.BAD_GATEWAY);
     }
   }
 

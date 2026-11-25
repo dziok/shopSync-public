@@ -1,3 +1,4 @@
+import { useProductTitles } from './useProductTitles';
 import { TemplateResetButton } from './TemplateResetButton';
 import { useDeliveryAutofill } from "../useDeliveryAutofill";
 import axios from "axios";
@@ -25,7 +26,8 @@ import {
 import { MainTheme } from "./themes";
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
-import { EditorState, convertToRaw } from "draft-js";
+import { ContentState, EditorState, convertToRaw } from "draft-js";
+import { savedCopy } from "../templateCopy";
 // @ts-ignore
 import draftToHtml from "draftjs-to-html";
 import { API_URL } from "../config";
@@ -35,8 +37,10 @@ import { handleGetProductSafetyProducers } from "../backendQueries/getProductSaf
 import { handleGetProductSafetyCertificates } from "../backendQueries/getProductSafetyCertificates";
 import React from "react";
 import RelatedProductsSelect from "../relatedProductsSelect";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 
 type AddProductProps = {
     authToken: string;
@@ -95,12 +99,15 @@ interface Attribute {
 function AddCustomProduct(props: AddProductProps) {
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
-    const { register, handleSubmit, getFieldState, setValue, control, watch } = useForm<IFormInput>();
-    const [descriptionValue, setDescriptionValue] = useState<string>('');
+    const { register, handleSubmit, getFieldState, getValues, setValue, control, watch } = useForm<IFormInput>();
+    const [editorState, setEditorState] = useState(() => EditorState.createWithContent(
+        ContentState.createFromText(savedCopy('custom', 'pl:Produkt:Opis początkowy') ?? '')
+    ));
+    const [descriptionValue, setDescriptionValue] = useState(() => editorState.getCurrentContent().hasText()
+        ? draftToHtml(convertToRaw(editorState.getCurrentContent())) : '');
     const images = useProductImages();
     const { selectedImages, imageLinks } = images;
     const [addToApilo, setAddToApilo] = useState(true);
-    const [editorState, setEditorState] = useState(EditorState.createEmpty());
     const [categories, setCategories] = useState<CategoryResource[]>([]);
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const delivery = useDeliveryAutofill(setValue, getFieldState, images.setSelectedImages, attributeList, producers);
@@ -109,8 +116,7 @@ function AddCustomProduct(props: AddProductProps) {
     const [relatedPackId, setRelatedPackId] = useState("");
     const [attributeGroup, setAttributeGroup] = useState<any>(null);
     const [producer, setProducer] = useState<ProducersResource[]>([]);
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
     const [descriptionCZ, setDescriptionCZ] = useState("");
     const [descriptionSK, setDescriptionSK] = useState("");
 
@@ -323,8 +329,11 @@ function AddCustomProduct(props: AddProductProps) {
     };
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
         try {
             setLoading(true);
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
 
             // Dodaj zdjęcia do apilo
             if (addToApilo) try {
@@ -346,7 +355,7 @@ function AddCustomProduct(props: AddProductProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
 
             // Zbieranie atrybutów
@@ -401,12 +410,12 @@ function AddCustomProduct(props: AddProductProps) {
                                 active: data.active,
                             },
                             cs_CZ: {
-                                name: nameCZ,
+                                name: localized.cs,
                                 description: translatedCZ,
                                 active: data.active,
                             },
                             sk_SK: {
-                                name: nameSK,
+                                name: localized.sk,
                                 description: translatedSK,
                                 active: data.active,
                             },
@@ -436,6 +445,7 @@ function AddCustomProduct(props: AddProductProps) {
                 toast.error(getShoperErrorMessage(error, attributeList));
                 return;
             }
+            progress.created(response.data);
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -459,7 +469,6 @@ function AddCustomProduct(props: AddProductProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -487,9 +496,6 @@ function AddCustomProduct(props: AddProductProps) {
             );
 
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
 
             // Dodawanie zdjęć produktu
@@ -514,18 +520,21 @@ function AddCustomProduct(props: AddProductProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error, attributeList));
+                toast.error(progress.error(error, attributeList));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getShoperErrorMessage(error, attributeList));
+                toast.error(progress.error(error, attributeList));
             }
         } finally {
             setLoading(false);
@@ -542,18 +551,7 @@ function AddCustomProduct(props: AddProductProps) {
                         <h2>Dodaj produkt</h2>
                         <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
                         <TextField label="Tytuł" type="text"{...register("name", {
-                            onBlur: async (e) => {
-                                const value = e.target.value;
-
-                                try {
-                                    setNameCZ(await handleTranslateCZ(value))
-                                    setNameSK(await handleTranslateSK(value))
-                                    toast.success("przetłumaczono");
-                                } catch (error) {
-                                    console.error("Błąd podczas tłumaczenia:", error);
-                                    toast.error("błąd w tłumaczeniu");
-                                }
-                            }
+                            onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                         })} />
                         <TextField required label="SKU" {...register("SKU")} />
                         <TextField required label="Ilość" type="number"{...register("stock")} />
@@ -719,6 +717,7 @@ function AddCustomProduct(props: AddProductProps) {
                                             labelId={`select-${attribute.attribute_id}-label`}
                                             id={`select-${attribute.attribute_id}`}
                                             {...register(`attribute_${attribute.attribute_id}`)}
+                                            value={watch(`attribute_${attribute.attribute_id}`) ?? ''}
                                             label={attribute.name}
                                         >
 
@@ -739,6 +738,8 @@ function AddCustomProduct(props: AddProductProps) {
                                         control={
                                             <Checkbox
                                                 {...register(`attribute_${attribute.attribute_id}`)}
+                                                checked={!!watch(`attribute_${attribute.attribute_id}`)}
+                                                onChange={(_, checked) => setValue(`attribute_${attribute.attribute_id}`, checked, { shouldDirty: true })}
                                             />
                                         }
                                         label={attribute.name}
@@ -761,12 +762,20 @@ function AddCustomProduct(props: AddProductProps) {
                         })}
 
                         <ProductImageManager {...images} />
-                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                            <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                        </ApiloSubmitControls>
+                        <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                            photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                            <TemplateResetButton disabled={loading || images.uploadingImages} />
+                            <FormAssistant template="custom" token={props.authToken} control={control} attributes={attributeList}
+                                read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty}
+                                write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })} />
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                    {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                </Button>
+                            </ApiloSubmitControls>
+                        </TemplateActionBar>
                     </ThemeProvider>
                 </Box>
-                <TemplateResetButton disabled={loading || images.uploadingImages} />
             </form>
             <div className="preview">
                 <div style={{ backgroundColor: 'white', color: 'black', lineHeight: "0.8", padding: '20px' }}>

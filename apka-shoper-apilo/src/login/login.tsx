@@ -5,16 +5,16 @@ import { useLoginSubmit } from "./login.hooks"
 const Login = (props: LoginProps) => {
     const onSubmitRequest = useLoginSubmit(props)
 
-    const onSubmit = (values: LoginInputs) => {
+    const onSubmit = async (values: LoginInputs) => {
         props.setLogin(values.login)
         props.setPassword(values.password)
-        onSubmitRequest(values)
+        await onSubmitRequest(values)
     }
 
     const {
         register,
         handleSubmit,
-        formState: { errors },
+        formState: { errors, isSubmitting },
     } = useForm<LoginInputs>()
 
 
@@ -25,11 +25,12 @@ const Login = (props: LoginProps) => {
                 style={{ display: 'flex', flexDirection: 'column' }}
                 onSubmit={(handleSubmit(onSubmit))}>
 
-                <input placeholder="login" {...register("login")} />
-                <input placeholder="hasło" type="password" {...register("password", { required: true })} />
-                {errors.password && <span>This field is required</span>}
+                <input placeholder="login" autoComplete="username" aria-label="Login" {...register("login", { required: "Wpisz login.", setValueAs: value => value.trim() })} />
+                {errors.login && <span role="alert">{errors.login.message}</span>}
+                <input placeholder="hasło" type="password" autoComplete="current-password" aria-label="Hasło" {...register("password", { required: "Wpisz hasło." })} />
+                {errors.password && <span role="alert">{errors.password.message}</span>}
 
-                <button type="submit" >zaloguj</button>
+                <button type="submit" disabled={isSubmitting}>Zaloguj</button>
             </form>
         </div>
     )

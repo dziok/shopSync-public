@@ -1,3 +1,5 @@
+import { useProductTitles } from './useProductTitles';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import axios from "axios";
 import { useForm, SubmitHandler, Controller } from "react-hook-form"
@@ -9,17 +11,17 @@ import { MainTheme } from "./themes";
 import { API_URL } from "../config";
 import './addProducts.css';
 import { ProductImageManager, useProductImages } from "./productImageManager";
-import { batteryDescription, GradeDescriptios, keyboardDescription, LaptopTemplate, matrixGradeDescriptios } from "./templates/laptopTemplate";
+import { LaptopTemplate } from "./templates/laptopTemplate";
 import { LaptopTemplateApilo } from "./templates/laptopTemplate-apilo";
 import { LaptopTemplateCZ } from "./templatesCZ/laptopTemplateCZ";
 import { LaptopTemplateSK } from "./templatesSK/laptopTemplateSK";
-import { batteryDescriptionCZ, batteryDescriptionSK, GradeDescriptionsCZ, GradeDescriptionsSK, keyboardDescriptionCZ, keyboardDescriptionSK, matrixGradeDescriptiosCZ, matrixGradeDescriptiosSK } from "./additionalDescriptions/visualConditionDescriptions";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
 import { LaptopAttributes_CZ, LaptopAttributes_SK, LaptopStatusKey } from "./additionalDescriptions/attributesTranslations";
 import RelatedProductsSelect from "../relatedProductsSelect";
 import React from "react";
-import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
+import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
 
 type AddLaptopProps = {
     authToken: string,
@@ -116,6 +118,7 @@ interface ProducersResource {
 }
 
 function AddLaptop(props: AddLaptopProps) {
+    const [{ matrixGradeDescriptios, matrixGradeDescriptiosCZ, matrixGradeDescriptiosSK, GradeDescriptios, GradeDescriptionsCZ, GradeDescriptionsSK, batteryDescription, batteryDescriptionCZ, batteryDescriptionSK, keyboardDescription, keyboardDescriptionCZ, keyboardDescriptionSK }] = useState(() => templateDictionaries('laptop'));
     const [producers, setProducers] = useState<ProducersResource[]>([]);
     const [portsListString, setPortsListString] = useState("");
     const { formState: { isSubmitting }, register, handleSubmit, setValue, reset, watch, control } = useForm<IFormInput>();
@@ -124,8 +127,7 @@ function AddLaptop(props: AddLaptopProps) {
     const [addToApilo, setAddToApilo] = useState(true);
     // const [apiloImageUUIDS, setApiloImageUUIDS] = useState<string[]>([]);
     const [categories, setCategories] = useState<CategoryResource[]>([]);
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
+    const titles = useProductTitles();
     const [additinalKeyboardInfoCZ, setAdditinalKeyboardInfoCZ] = useState("");
     const [additinalKeyboardInfoSK, setAdditinalKeyboardInfoSK] = useState("");
     const [additinalMatrixInfoCZ, setAdditinalMatrixInfoCZ] = useState("");
@@ -219,8 +221,11 @@ function AddLaptop(props: AddLaptopProps) {
 
 
     const onSubmit: SubmitHandler<IFormInput> = async (data) => {
+        const progress = shoperSaveProgress();
 
         try {
+            const localized = await titles.prepare(data.name);
+            if (!localized) return;
             //dodaj zdjęcia do apilo
             if (addToApilo) try {
                 for (let i = 0; i < selectedImages.length; i++) {
@@ -241,7 +246,7 @@ function AddLaptop(props: AddLaptopProps) {
                 }
             } catch (error) {
                 console.error("Image upload error:", error);
-                toast.error("Błąd podczas dodawania zdjęcia na apilo");
+                throw new Error('Nie przesłano zdjęcia do Apilo: ' + getShoperErrorMessage(error));
             }
 
             const response = await axios.post(`${API_URL}/product/shoper`, {
@@ -322,17 +327,18 @@ function AddLaptop(props: AddLaptopProps) {
                 }
             });
 
+            progress.created(response.data);
             const updateDescription = async () => {
                 try {
                     const updateResponse = await axios.put(`${API_URL}/product/${response.data}`, {
                         translations: {
                             cs_CZ: {
-                                name: nameCZ,
+                                name: localized.cs,
                                 description: descriptionCZ,
                                 active: data.active,
                             },
                             sk_SK: {
-                                name: nameSK,
+                                name: localized.sk,
                                 description: descriptionSK,
                                 active: data.active,
                             },
@@ -434,20 +440,9 @@ function AddLaptop(props: AddLaptopProps) {
                         }
                     });
 
-                    toast.success("Produkt został zaktualizowany w Shoperze.");
-                }
-                catch (error) {
-                    if (axios.isAxiosError(error)) {
-                        console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                        toast.error("Wystąpił błąd podczas update");
-                    } else {
-                        console.error("Błąd aplikacji:", error);
-                        toast.error("Wystąpił błąd podczas update");
-                    }
-                }
-            }
-
-            updateDescription()
+                } catch (error) { throw error; }
+            };
+            await updateDescription();
             if (addToApilo) {
             const apiloPrductsListResponse = await axios.get(`${API_URL}/product/apiloProductslist`, {
                 params: {
@@ -471,7 +466,6 @@ function AddLaptop(props: AddLaptopProps) {
                     );
                 } catch (error) {
                     console.error("Product delete error:", error);
-                    toast.error("Wystąpił błąd podczas usuwania produktu");
                     throw error;
                 }
             }
@@ -496,9 +490,6 @@ function AddLaptop(props: AddLaptopProps) {
                     }
                 });
             }
-            toast.success(addToApilo
-                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
-                : `Produkt ${response.data} został dodany do Shopera.`);
 
             const productId = response.data;
 
@@ -521,18 +512,21 @@ function AddLaptop(props: AddLaptopProps) {
                     });
                 } catch (error) {
                     console.error("Image upload error:", error);
-                    toast.error("Błąd podczas dodawania zdjęcia");
                     throw error;
                 }
             }
 
+
+            toast.success(addToApilo
+                ? `Produkt ${response.data} został dodany do Shopera i Apilo.`
+                : `Produkt ${response.data} został dodany do Shopera.`);
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error("Błąd HTTP:", error.response?.status, error.response?.data);
-                toast.error(getShoperErrorMessage(error));
+                toast.error(progress.error(error));
             } else {
                 console.error("Błąd aplikacji:", error);
-                toast.error(getShoperErrorMessage(error));
+                toast.error(progress.error(error));
             }
 
         };
@@ -726,18 +720,7 @@ function AddLaptop(props: AddLaptopProps) {
                             <TextField required label="Ilość" type="number"{...register("stock")} />
                             <TextField required label="Cena" type="number" inputProps={{ step: "0.01" }} {...register("price")} />
                             <TextField required label="Tytuł" type="text"{...register("name", {
-                                onBlur: async (e) => {
-                                    const value = e.target.value;
-
-                                    try {
-                                        setNameCZ(await handleTranslateCZ(value))
-                                        setNameSK(await handleTranslateSK(value))
-                                        toast.success("przetłumaczono");
-                                    } catch (error) {
-                                        console.error("Błąd podczas tłumaczenia:", error);
-                                        toast.error("błąd w tłumaczeniu");
-                                    }
-                                }
+                                onBlur: e => { if (e.target.value.trim()) void titles.prepare(e.target.value); }
                             })} />
                             <Controller
                                 name="categoryId"
@@ -1681,10 +1664,15 @@ function AddLaptop(props: AddLaptopProps) {
                             <textarea defaultValue={LaptopTemplateApilo('', '', '', '', '', '', '', '', '', false, true, '', '', '', '', true, false, false, '', '', '', '', '', '', '', '', '', '', '', '', '', '', false, '', false, false, false, false, false, false, false, false)}  {...register("descriptionApilo")} />
                             <ProductImageManager {...images} />
 
-                            <TemplateResetButton disabled={isSubmitting || images.uploadingImages} beforeReset={() => reset()} />
-                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                                <Button variant="contained" type="submit" disabled={!images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                            </ApiloSubmitControls>
+                            <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                                photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                                <TemplateResetButton disabled={isSubmitting || images.uploadingImages} beforeReset={() => reset()} />
+                                <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                    <Button variant="contained" color="success" type="submit" disabled={!images.imagesReady || images.uploadingImages}>
+                                        {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                    </Button>
+                                </ApiloSubmitControls>
+                            </TemplateActionBar>
                         </ThemeProvider>
                     </Box>
                 </form>

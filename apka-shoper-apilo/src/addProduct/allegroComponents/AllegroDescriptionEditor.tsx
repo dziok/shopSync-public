@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sanitizeOptionHtml } from "../../templateCopy";
 import {
     Box,
     Button,
@@ -94,6 +95,20 @@ type AllegroDescriptionPreviewProps = {
     availableImages?: string[];
 };
 
+type OfferSection = { items: { type: string; content?: string; url?: string }[] };
+
+export function AllegroOfferPreview({ description }: { description: { sections: (OfferSection | null)[] } }) {
+    const sections = description.sections.flatMap((section, index) => section ? [{
+        id: String(index),
+        items: section.items.flatMap<TemplateItem>((item) => {
+            if (item.type === "TEXT") return [{ type: "TEXT", content: sanitizeOptionHtml(item.content ?? "") }];
+            if (item.type === "IMAGE") return [{ type: "IMAGE", url: item.url ?? "" }];
+            return [];
+        }),
+    }] : []);
+    return <AllegroDescriptionPreview template={{ sections }} />;
+}
+
 export function AllegroDescriptionPreview({
     template,
     onChange,
@@ -171,7 +186,7 @@ export function AllegroDescriptionPreview({
                     />
                 ) : (
                     <Typography sx={{ p: 2, color: "#496079", textAlign: "center" }}>
-                        Kliknij, aby wybrać zdjęcie
+                        {editable ? "Kliknij, aby wybrać zdjęcie" : "Brak zdjęcia"}
                     </Typography>
                 )}
             </Box>
@@ -215,7 +230,7 @@ export function AllegroDescriptionPreview({
                 })}
             </Box>
 
-            <Dialog open={imageSlot !== null} onClose={closeImagePicker} maxWidth="md" fullWidth>
+            {onChange && <Dialog open={imageSlot !== null} onClose={closeImagePicker} maxWidth="md" fullWidth>
                 <DialogTitle>Wybierz zdjęcie do opisu Allegro</DialogTitle>
                 <DialogContent dividers>
                     {selectableImages.length ? (
@@ -248,7 +263,7 @@ export function AllegroDescriptionPreview({
                 <DialogActions>
                     <Button onClick={closeImagePicker}>Zamknij</Button>
                 </DialogActions>
-            </Dialog>
+            </Dialog>}
         </>
     );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { Autocomplete, Button, MenuItem, Tab, Tabs, TextField, ThemeProvider } from "@mui/material";
+import { Button, MenuItem, Tab, Tabs, TextField, ThemeProvider } from "@mui/material";
 import { toast } from "react-toastify";
 import { API_URL } from "./config";
 import { getApiErrorMessage } from "./backendQueries/apiErrorMessage";
@@ -10,11 +10,16 @@ import {
 } from "./templateSettings";
 import "./templateSettingsPanel.css";
 import { MainTheme } from "./addProduct/themes";
-import { CatalogEntry, getTemplateDescriptionCatalog } from "./templateDescriptionCatalog";
+import TemplateCopyEditor from "./templateCopyEditor";
+import { officeCatalog, rowError } from './addProduct/officeSpecRows';
 import { getTemplateBlockCatalog } from "./templateBlocks";
+import CatalogSettings from './allegroParameters/CatalogSettings';
+import { hasCatalog } from './allegroParameters/catalog';
+import AiSettingsPanel from './AiSettingsPanel';
 
 type Props = {
     authToken: string;
+    allegroAccountId?: string;
     initialKey: TemplateKey;
     settings: TemplateSettingsFile;
     onSaved: (settings: TemplateSettingsFile) => void;
@@ -30,7 +35,7 @@ const fieldLabels: Record<DescriptionRule["field"], string> = {
     name: "Nazwa produktu", sku: "SKU",
 };
 
-export default function TemplateSettingsPanel({ authToken, initialKey, settings, onSaved, onClose }: Props) {
+export default function TemplateSettingsPanel({ authToken, allegroAccountId, initialKey, settings, onSaved, onClose }: Props) {
     const [key, setKey] = useState<TemplateKey>(initialKey);
     const [draft, setDraft] = useState<TemplateSettings>(() => copy(settings.templates[initialKey]));
     const [tab, setTab] = useState(0);
@@ -38,7 +43,6 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
     const [saving, setSaving] = useState(false);
     const [serverVersion, setServerVersion] = useState<TemplateSettingsFile | null>(null);
     const dirty = JSON.stringify(draft) !== JSON.stringify(settings.templates[key]);
-    const catalog = getTemplateDescriptionCatalog(key);
     const blocks = getTemplateBlockCatalog(key);
 
     useEffect(() => { setDraft(copy(settings.templates[key])); }, [settings, key]);
@@ -89,6 +93,15 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
         });
     };
     const save = async () => {
+        if (key === 'pc') for (const entry of officeCatalog()) {
+            const source = draft.description.copy?.[entry.id];
+            if (source === undefined || !entry.row) continue;
+            const error = rowError(entry.row,source);
+            if (error || source.length > 12000) {
+                toast.error(entry.label + ': ' + (error || 'Wiersz jest zbyt długi.'));
+                return;
+            }
+        }
         for (const rule of Object.values(draft.description.blocks)) {
             if (rule.mode !== "hide" && (!rule.value.trim() || (rule.field === "attribute" && !/^\d+$/.test(rule.attributeId)))) {
                 toast.error("Uzupełnij warunek widoczności sekcji przed zapisem.");
@@ -121,19 +134,6 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
         setDraft(copy(serverVersion.templates[key]));
         setServerVersion(null);
     };
-    const addCatalogDescription = (entry: CatalogEntry | null) => {
-        if (!entry) return;
-        if (draft.description.replacements.some((item) => item.label === entry.label)) {
-            toast.info("Ten opis jest już dodany do edycji.");
-            return;
-        }
-        setDraft((current) => ({ ...current, description: {
-            ...current.description,
-            replacements: [...current.description.replacements, {
-                id: nextId(), label: entry.label, find: { ...entry.text }, text: { ...entry.text },
-            }],
-        } }));
-    };
 
     return <ThemeProvider theme={MainTheme}><div className="template-admin">
         <header className="template-admin__header">
@@ -156,7 +156,14 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
             <main className="template-admin__main">
                 <Tabs value={tab} onChange={(_, next) => setTab(next)} variant="scrollable" scrollButtons="auto">
                     <Tab label="Shoper" /><Tab label="Opisy" /><Tab label="Elementy opisu" /><Tab label="Apilo" /><Tab label="Allegro" />
+                    <Tab label="OpenAI (wspólne)" />
+                    <Tab label="Zalecenia AI" />
                 </Tabs>
+                {tab === 5 && <AiSettingsPanel expanded authToken={authToken} />}
+                {tab === 6 && <TextField fullWidth multiline minRows={5} margin="normal"
+                    label={`Stałe zalecenia AI: ${TEMPLATE_NAMES[key]}`} value={draft.aiInstructions ?? ''}
+                    inputProps={{ maxLength: 4000 }}
+                    onChange={event => setDraft({ ...draft, aiInstructions: event.target.value })} />}
                 {tab === 0 && <div className="template-admin__fields">
                     {([
                         ["categoryId", "ID kategorii"], ["gaugeId", "ID jednostki miary"],
@@ -171,6 +178,8 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
                     <Tabs value={language} onChange={(_, next: Language) => setLanguage(next)}>
                         {(Object.entries(languageLabels) as Array<[Language, string]>).map(([id, label]) => <Tab key={id} value={id} label={label} />)}
                     </Tabs>
+                    <TemplateCopyEditor key={key + language} authToken={authToken} template={key} language={language} edits={draft.description.copy ?? {}}
+                        onChange={copy => setDraft(current => ({ ...current, description: { ...current.description, copy } }))} />
                     <div className="template-admin__fields">
                         <TextField label="Tekst przed opisem" multiline minRows={3} fullWidth
                             value={draft.description.before[language]} onChange={(event) => updateLocalized("before", event.target.value)} />
@@ -207,12 +216,6 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
                         <TextField label={`Opis: ${languageLabels[language]}`} multiline minRows={3} fullWidth
                             value={rule.text[language]} onChange={(event) => updateRule(rule.id, { text: { ...rule.text, [language]: event.target.value } })} />
                     </div>)}
-                    {catalog.length > 0 && <div className="template-admin__catalog">
-                        <Autocomplete<CatalogEntry> options={catalog} value={null} onChange={(_, entry) => addCatalogDescription(entry)}
-                            getOptionLabel={(entry) => entry.label} groupBy={(entry) => entry.label.split(":")[0]}
-                            renderInput={(params) => <TextField {...params} label="Dodaj istniejący opis opcji" />}
-                        />
-                    </div>}
                     <div className="template-admin__section-title"><h3>Zamiany tekstu</h3>
                         <Button onClick={() => setDraft((current) => ({ ...current, description: {
                             ...current.description, replacements: [...current.description.replacements, { id: nextId(), find: emptyText(), text: emptyText() }],
@@ -276,6 +279,14 @@ export default function TemplateSettingsPanel({ authToken, initialKey, settings,
                     <TextField label="Gwarancja" value={draft.allegro.warrantyName} fullWidth
                         onChange={(event) => setDraft((current) => ({ ...current, allegro: { ...current.allegro, warrantyName: event.target.value } }))} />
                 </div>}
+                {tab === 4 && hasCatalog(key) && <CatalogSettings key={key + ':' + allegroAccountId} template={key}
+                    accountId={allegroAccountId} authToken={authToken} disabled={saving || !!serverVersion}
+                    value={draft.allegro.parameterCatalog} onChange={parameterCatalog => setDraft(current => {
+                        const allegro = { ...current.allegro };
+                        if (parameterCatalog) allegro.parameterCatalog = parameterCatalog;
+                        else delete allegro.parameterCatalog;
+                        return { ...current, allegro };
+                    })} />}
             </main>
         </div>
     </div></ThemeProvider>;

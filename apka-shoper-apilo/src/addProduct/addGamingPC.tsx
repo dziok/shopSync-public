@@ -1,3 +1,5 @@
+import { allegroOfferError } from '../backendQueries/allegroOfferError';
+import { templateDictionaries } from '../templateDescriptionCatalog';
 import { TemplateResetButton } from './TemplateResetButton';
 import { DeliveryContext, useDeliveryAutofill } from "../useDeliveryAutofill";
 import { deliveryFields } from "../bulkFormMapping";
@@ -34,10 +36,11 @@ import { EditorState, convertToRaw } from "draft-js";
 import draftToHtml from "draftjs-to-html";
 import { API_URL } from "../config";
 import { handleTranslateCZ, handleTranslateSK } from "../backendQueries/translate";
+import { prepareGamingTitles } from "./gamingTitles";
 import { Product, SearchResult, FormDataAllegro, ProducersResource, Attribute, ProductSafetyCertificateResource, ProductSafetyProducerResource } from "../types";
 import { gamingTemplate, gamingTemplateAllegro } from "./templates/gamingTemplate";
-import { pcParametersAll } from "../allegroParameters/pcParametersAll";
-import { gaming_cpuTypesDescriptions, gaming_cpuTypesDescriptions_CZ, gaming_cpuTypesDescriptions_SK, gaming_diskTypesDescriptions, gaming_diskTypesDescriptions_CZ, gaming_diskTypesDescriptions_SK, gaming_gpu, gaming_gpu_CZ, gaming_gpu_SK, gaming_ramTypesDescriptions, gaming_ramTypesDescriptions_CZ, gaming_ramTypesDescriptions_SK } from "./additionalDescriptions/gamingDescriptions";
+import { useCatalog, withCatalogLabels } from "../allegroParameters/catalog";
+import { buildOfferParameters as buildCatalogParameters } from "./allegroComponents/buildOfferParameters";
 import { gamingTemplateSK } from "./templatesSK/gamingTemplateSK";
 import { gamingTemplateCZ } from "./templatesCZ/gamingTemplateCZ";
 import { handleGetProductSafetyProducers } from "../backendQueries/getProductSafetyProducers";
@@ -45,8 +48,11 @@ import { handleGetProductSafetyCertificates } from "../backendQueries/getProduct
 import RelatedProductsSelect from "../relatedProductsSelect";
 import { getShoperErrorMessage } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
+import { AllegroOfferPreview } from "./allegroComponents/AllegroDescriptionEditor";
 import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroComponents/responsibleProducers";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
+import { TemplateActionBar } from "./TemplateActionBar";
+import FormAssistant from "./FormAssistant";
 import { getCreatedShoperProductId, getExactApiloProductId } from "./gamingProductTargets";
 
 type AddProductProps = {
@@ -87,6 +93,8 @@ interface IFormInput {
 
 
 function AddGamingPC(props: AddProductProps) {
+    const { fields: pcParametersAll } = useCatalog('gaming');
+    const [{ gaming_cpuTypesDescriptions, gaming_cpuTypesDescriptions_CZ, gaming_cpuTypesDescriptions_SK, gaming_ramTypesDescriptions, gaming_ramTypesDescriptions_CZ, gaming_ramTypesDescriptions_SK, gaming_diskTypesDescriptions, gaming_diskTypesDescriptions_CZ, gaming_diskTypesDescriptions_SK, gaming_gpu, gaming_gpu_CZ, gaming_gpu_SK }] = useState(() => templateDictionaries('gaming'));
     const [attributeList, setAttributeList] = useState<Attribute[]>([]);
     const [loading, setLoading] = useState(false); // Dodajemy stan loading
     const submissionInProgress = useRef(false);
@@ -107,8 +115,6 @@ function AddGamingPC(props: AddProductProps) {
     const [relatedPackId, setRelatedPackId] = useState("");
     const [attributeGroup, setAttributeGroup] = useState<any>(null);
     const [producer, setProducer] = useState<ProducersResource[]>([]);
-    const [nameCZ, setNameCZ] = useState("");
-    const [nameSK, setNameSK] = useState("");
     let apiloImageUUIDs: string[] = [];
     const delivery = useContext(DeliveryContext);
     const [formData, setFormData] = useState<FormDataAllegro>(() => {
@@ -234,44 +240,6 @@ function AddGamingPC(props: AddProductProps) {
     //     await uploadShoperAttributes(cpuParameters, 67);
     // }
 
-    const buildOfferParameters = (formData: FormDataAllegro, describesProductValue: boolean | undefined): any[] => {
-        return Object.entries(formData).map(([name, value]) => {
-            const paramDef = pcParametersAll.find(p => p.name === name);
-
-            if (!paramDef || paramDef.options?.describesProduct !== describesProductValue) return null;
-
-            const paramId = String(paramDef.id);
-
-            if (paramDef.type === 'dictionary' && paramDef.dictionary) {
-                const dictionary = paramDef.dictionary;
-
-                if (Array.isArray(value)) {
-                    const matchedIds = value
-                        .map(val => dictionary.find(d => d.value === val)?.id)
-                        .filter(Boolean); // usuń undefined
-
-                    return {
-                        id: paramId,
-                        valuesIds: matchedIds
-                    };
-                } else {
-                    const matchedId = dictionary.find(d => d.value === value)?.id;
-                    return {
-                        id: paramId,
-                        valuesIds: matchedId ? [matchedId] : []
-                    };
-                }
-            }
-
-            // dla liczbowych i tekstowych (integer, float, string)
-            return {
-                id: paramId,
-                values: Array.isArray(value) ? value : [value]
-            };
-        }).filter(Boolean); // usuń null/undefined
-    };
-
-
     const handleAddAllegroOffer = async () => {
         if (!responsibleProducerId) {
             toast.error("Wybierz producenta odpowiedzialnego przed dodaniem oferty Allegro.");
@@ -285,6 +253,11 @@ function AddGamingPC(props: AddProductProps) {
             return;
         }
 
+        const brand = pcParametersAll.find(field => field.id === '248811');
+        if (brand?.dictionary && !brand.dictionary.some(option => option.value === formData[brand.name])) {
+            toast.error(`Pole „${brand.name}”: wybierz markę z listy Allegro przed wystawieniem oferty.`);
+            return;
+        }
         const productData = {
             "name": currentName,
 
@@ -299,7 +272,7 @@ function AddGamingPC(props: AddProductProps) {
                         // Dla GTIN wskaż "GTIN",dla numerów 
                         // katalogowych nadanych przez producenta - "MPN".
                         // Jeśli wskazujesz UUID produktu, pozostaw pole puste.
-                        "parameters": buildOfferParameters(formData, true),
+                        "parameters": buildCatalogParameters(formData, true, pcParametersAll),
                         "images": imageLinks,
                     },
                     "responsibleProducer": {
@@ -354,7 +327,7 @@ function AddGamingPC(props: AddProductProps) {
 
                 }],
 
-            "parameters": buildOfferParameters(formData, false),
+            "parameters": buildCatalogParameters(formData, false, pcParametersAll),
 
             "external": {
                 "id": SKU
@@ -405,20 +378,14 @@ function AddGamingPC(props: AddProductProps) {
             setResult(response.data);
             toast.success("Dodano produkt do allegro");
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const apiError = error.response?.data;
-
-                console.error("Błąd Allegro:", apiError);
-                toast.error(getApiErrorMessage(error, "Nie udało się dodać oferty do Allegro."));
-            } else {
-                console.error("Błąd aplikacji:", error);
-                toast.error("Wystąpił nieznany błąd.");
-            }
+            console.error('Błąd wystawiania na Allegro:', axios.isAxiosError(error) ? error.response?.data : error);
+            toast.error(allegroOfferError(error, pcParametersAll, productData));
         }
     };
 
 
-    const handleSelectAllegroProduct = (product: Product) => {
+    const handleSelectAllegroProduct = (selected: Product) => {
+        const product = withCatalogLabels(selected, pcParametersAll);
         setSelectedProductId(product.id);
         setSelectedProduct(product);
 
@@ -430,7 +397,7 @@ function AddGamingPC(props: AddProductProps) {
                 .filter((p: any) => p?.options?.identifiesProduct === true)
                 .map((p: any) => p.name)
         );
-        setLockedParams(identified);
+
         // ⬆️  KONIEC NOWEGO
 
         product.parameters.forEach((param) => {
@@ -469,6 +436,9 @@ function AddGamingPC(props: AddProductProps) {
             }
         });
 
+        const brand = pcParametersAll.find(field => field.id === '248811');
+        if (brand?.dictionary && !brand.dictionary.some(option => option.value === autoFilledForm[brand.name])) identified.delete(brand.name);
+        setLockedParams(identified);
         setFormData(autoFilledForm);
 
         setValue("name", product.name);
@@ -626,8 +596,11 @@ function AddGamingPC(props: AddProductProps) {
         submissionInProgress.current = true;
         const submittedSku = String(data.SKU).trim();
         const cattegoryID = data.set === "tani" || data.set === "drogi" ? 223 : 321;
+        let createdId: number | undefined;
+        let shoperImageFailures = 0;
         try {
             setLoading(true);
+            const titles = await prepareGamingTitles(data.name, handleTranslateCZ, handleTranslateSK);
 
             // Dodaj zdjęcia do Apilo
             if (addToApilo) for (let i = 0; i < selectedImages.length; i++) {
@@ -681,7 +654,7 @@ function AddGamingPC(props: AddProductProps) {
                         pkwiu: "-",
                         translations: {
                             pl_PL: {
-                                name: data.name,
+                                name: titles.pl,
                                 description: description,
                                 active: data.active,
                             },
@@ -745,7 +718,7 @@ function AddGamingPC(props: AddProductProps) {
                 throw error;
             }
             const productId = getCreatedShoperProductId(shoperResponse.data);
-            toast.success("Dodano produkt do Shopera");
+            createdId = productId;
 
             //Dodanie czeskiej i słowackiem wersji do shopera
 
@@ -754,12 +727,12 @@ function AddGamingPC(props: AddProductProps) {
                     await axios.put(`${API_URL}/product/${productId}`, {
                         translations: {
                             cs_CZ: {
-                                name: nameCZ,
+                                name: titles.cs,
                                 description: descriptionCZ,
                                 active: data.active,
                             },
                             sk_SK: {
-                                name: nameSK,
+                                name: titles.sk,
                                 description: descriptionSK,
                                 active: data.active,
                             },
@@ -797,7 +770,6 @@ function AddGamingPC(props: AddProductProps) {
                         }
                     });
 
-                    toast.success("Produkt został zaktualizowany w Shoperze.");
                 }
                 catch (error) {
                     if (axios.isAxiosError(error)) {
@@ -883,18 +855,22 @@ function AddGamingPC(props: AddProductProps) {
                         );
                     } catch (error) {
                         console.error("Błąd zdjęcia do Shopera:", error);
-                        toast.error(`Błąd przy zdjęciu ${i + 1} w Shoperze`);
+                        shoperImageFailures++;
+                        toast.error(`Shoper #${productId}, zdjęcie ${i + 1}: ${getShoperErrorMessage(error)}`);
                     }
                 }
             } catch (error) {
                 console.error("Błąd podczas dodawania zdjęć do Shopera:", error);
-                toast.error("Nie udało się dodać zdjęć do Shopera");
+                shoperImageFailures++;
+                toast.error(`Utworzono produkt #${productId}, ale nie udało się dodać zdjęć do Shopera.`);
             }
+            if (!shoperImageFailures) toast.success(`Dodano produkt do Shopera (ID ${productId}).`);
         } catch (error) {
             console.error("Błąd podczas dodawania produktu gamingowego:", error);
-            toast.error(axios.isAxiosError(error)
+            const detail = axios.isAxiosError(error)
                 ? getShoperErrorMessage(error, attributeList)
-                : getApiErrorMessage(error, "Nie udało się zapisać produktu gamingowego."));
+                : getApiErrorMessage(error, "Nie udało się zapisać produktu gamingowego.");
+            toast.error(createdId ? `Utworzono produkt w Shoperze (ID ${createdId}), ale nie zapisano wersji CZ/SK. Nie dodawaj produktu ponownie.\n${detail}` : detail);
         } finally {
             setLoading(false);
             apiloImageUUIDs = [];
@@ -1175,20 +1151,23 @@ function AddGamingPC(props: AddProductProps) {
         <div className="addProductMainContainer">
             {/* <button type="button" onClick={uploadShoperAttributes2}>Szukaj</button> */}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="AddOfferFormContainer" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="AddOfferFormContainer" style={{ display: "flex", flexDirection: "column", width: "25vw" }}>
                 <RelatedProductsSelect authToken={props.authToken} value={relatedPackId} onChange={setRelatedPackId} />
                 <Box sx={{ py: 2, display: "grid", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
                     <ThemeProvider theme={MainTheme}>
+                        <form id="gaming-shoper-form" onSubmit={handleSubmit(onSubmit)} style={{ display: 'contents' }}>
                         <FormControl fullWidth >
-                            <InputLabel>język opisu</InputLabel>
+                            <InputLabel id="gaming-description-preview-label">Podgląd opisu</InputLabel>
                             <Select
-                                label="język opisu"
+                                labelId="gaming-description-preview-label"
+                                label="Podgląd opisu"
                                 {...register("descriptionLanguage")}
                                 defaultValue={"description"}
                             >
                                 <MenuItem value="description">Polski</MenuItem>
                                 <MenuItem value="descriptionCZ">Czeski</MenuItem>
                                 <MenuItem value="descriptionSK">Słowacki</MenuItem>
+                                <MenuItem value="descriptionAllegro">Allegro</MenuItem>
 
                             </Select>
                         </FormControl>
@@ -1223,20 +1202,7 @@ function AddGamingPC(props: AddProductProps) {
                         </div>
 
                         <FormControlLabel control={<Controller name="active" control={control} defaultValue={!delivery} render={({ field }) => <Checkbox name={field.name} checked={!!field.value} inputRef={field.ref} onChange={(_, checked) => field.onChange(checked)} onBlur={field.onBlur} />} />} label="aktywność" />
-                        <TextField label="Tytuł" type="text"{...register("name", {
-                            onBlur: async (e) => {
-                                const value = e.target.value;
-
-                                try {
-                                    setNameCZ(await handleTranslateCZ(value))
-                                    setNameSK(await handleTranslateSK(value))
-                                    toast.success("przetłumaczono");
-                                } catch (error) {
-                                    console.error("Błąd podczas tłumaczenia:", error);
-                                    toast.error("błąd w tłumaczeniu");
-                                }
-                            }
-                        })} />
+                        <TextField required label="Tytuł" type="text" {...register("name")} />
                         {/* <TextField required label="SKU" {...register("SKU")} /> */}
                         <TextField required label="SKU" type="text"{...register("SKU")} />
                         <TextField required label="Ilość" type="number"{...register("stock")} />
@@ -1417,6 +1383,7 @@ function AddGamingPC(props: AddProductProps) {
                         <TextField label="model ramu" type="text"{...register("ramModel")} />
                         <TextField label="model ubudowy" type="text"{...register("caseModel")} />
                         <TextField label="model radiatora" type="text"{...register("cpuFanModel")} />
+                        </form>
                         <Typography variant="h4" style={{ textAlign: 'center', margin: '20px' }}>Parametry Allegro</Typography>
 
                         <ResponsibleProducerSelect
@@ -1428,14 +1395,15 @@ function AddGamingPC(props: AddProductProps) {
                         {[...pcParametersAll]
                             .sort((a, b) => {
                                 const order = ['#ff000024', '#0089ff24', '#fffa0024'];
-                                return order.indexOf(a.shoper) - order.indexOf(b.shoper);
+                                return (a.shoper ? order.indexOf(a.shoper) : order.length) - (b.shoper ? order.indexOf(b.shoper) : order.length);
                             })
-                            .map((param, index) => {
+                            .map((param) => {
+                                const index = pcParametersAll.indexOf(param);
                                 const isMulti = param.restrictions?.multipleChoices === true;
                                 const disabled = isParamDisabled(param.name); // ⬅️ NOWE
 
                                 return (
-                                    <Box key={param.id} sx={{ opacity: disabled ? 0.7 : 1 }}>
+                                    <Box key={param.id} data-ai-allegro={param.id} sx={{ opacity: disabled ? 0.7 : 1 }}>
                                         {/* dictionary */}
                                         {param.type === 'dictionary' && param.dictionary && (
                                             <FormControl fullWidth required={param.required} disabled={disabled}>
@@ -1458,7 +1426,7 @@ function AddGamingPC(props: AddProductProps) {
                                                     }
                                                 >
                                                     {param.dictionary.map((option) => (
-                                                        <MenuItem key={option.id} value={option.value}>
+                                                        <MenuItem key={option.id + ':' + option.value} value={option.value}>
                                                             {isMulti && (
                                                                 <Checkbox
                                                                     checked={
@@ -1483,14 +1451,10 @@ function AddGamingPC(props: AddProductProps) {
                                                 value={
                                                     isMulti
                                                         ? Array.isArray(formData[param.name]) ? formData[param.name] : []
-                                                        : typeof formData[param.name] === 'string' ? [formData[param.name]] : []
+                                                        : typeof formData[param.name] === 'string' ? formData[param.name] : null
                                                 }
                                                 onChange={(e, newValue) => {
-                                                    if (!newValue) return;
-                                                    const cleanValues = (Array.isArray(newValue) ? newValue : [newValue])
-                                                        .filter((v): v is string => typeof v === 'string');
-                                                    const valueToSet = isMulti ? cleanValues : (cleanValues[0] || '');
-                                                    handleChangeAllegro(param.name, valueToSet);
+                                                    handleChangeAllegro(param.name, newValue ?? (isMulti ? [] : ''));
                                                 }}
                                                 renderInput={(params) => (
                                                     <TextField
@@ -1545,15 +1509,41 @@ function AddGamingPC(props: AddProductProps) {
                         <label >opis</label>
                         <textarea defaultValue={gamingTemplate('', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', true, '', '', '', '', '')} />
                         <ProductImageManager {...images} />
-                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                            <Button variant="contained" type="submit" className="buttonForm" disabled={loading || !images.imagesReady || images.uploadingImages}>Dodaj</Button>
-                        </ApiloSubmitControls>
-                        <button type="button" onClick={handleAddAllegroOffer} disabled={loading || !images.imagesReady || images.uploadingImages}>Dodaj produkt allegro</button>
+                        <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
+                            photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
+                            <TemplateResetButton disabled={loading || images.uploadingImages} />
+                            <FormAssistant template="gaming" token={props.authToken} control={control}
+                                read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty}
+                                write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
+                                allegro={{ catalog: pcParametersAll, values: formData, write: handleChangeAllegro, locked: isParamDisabled }} />
+                            <Button
+                                variant="contained"
+                                type="button"
+                                onClick={handleAddAllegroOffer}
+                                disabled={loading || !images.imagesReady || images.uploadingImages}
+                            >
+                                + Allegro
+                            </Button>
+                            <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    type="submit"
+                                    form="gaming-shoper-form"
+                                    className="buttonForm"
+                                    disabled={loading || !images.imagesReady || images.uploadingImages}
+                                >
+                                    {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                                </Button>
+                            </ApiloSubmitControls>
+                        </TemplateActionBar>
                     </ThemeProvider>
                 </Box>
-                <TemplateResetButton disabled={loading || images.uploadingImages} />
-            </form>
+            </div>
             <div className="preview">
+                {descriptionLanguage === "descriptionAllegro" && (
+                    <AllegroOfferPreview description={generateDescriptionAllegro(convertedFormData)} />
+                )}
 
                 {descriptionLanguage === 'description' && (
                     <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
