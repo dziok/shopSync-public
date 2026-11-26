@@ -52,6 +52,7 @@ import { AllegroOfferPreview } from "./allegroComponents/AllegroDescriptionEdito
 import { ApiloSubmitControls } from "./apiloSubmitControls";
 import { TemplateActionBar } from "./TemplateActionBar";
 import FormAssistant from "./FormAssistant";
+import { useHardwareAssessment } from "./useHardwareAssessment";
 
 type AddProductProps = {
     authToken: string
@@ -714,8 +715,9 @@ function AddPC(props: AddProductProps) {
                             <p>Przy każdej wysyłce twojego komputera stacjonarnego dobieramy odpowiednie wypełniacze do konkretnego podzespołu komputerowego, abyś cieszył się nowym zakupem bez żadnych problemów. </p>
                             <p>(Zdjęcie podglądowe)</p>`
                     }]
-                }
-                ].filter(Boolean)
+                },
+                ...assessment.allegroSections
+            ].filter(Boolean)
         };
     };
 
@@ -1085,7 +1087,7 @@ function AddPC(props: AddProductProps) {
             if (!localized) return;
             if (addToApilo) apiloImageUUIDs = await AddImageApilo(props, selectedImages)
 
-            const response = await AddProductShoper(data, attributes, localized.cs, localized.sk, gaugeId, props, '249', relatedPackId || undefined)
+            const response = await AddProductShoper({ ...data, description: assessment.shoperDescription(data.description) }, attributes, localized.cs, localized.sk, gaugeId, props, '249', relatedPackId || undefined)
 
             progress.created(response);
             //dodaj produkt do apilo
@@ -1236,7 +1238,7 @@ function AddPC(props: AddProductProps) {
                 translations: {
                     pl_PL: {
                         name: data.name,
-                        description: data.description,
+                        description: assessment.shoperDescription(data.description),
                         active: data.active,
                     },
                     cs_CZ: {
@@ -1257,14 +1259,15 @@ function AddPC(props: AddProductProps) {
                     const additionalFeaturesAttribute = findAdditionalFeaturesAttribute(attributeList);
                     if (!additionalFeaturesAttribute) return;
                     const expected = attributes[additionalFeaturesAttribute.attribute_id];
+                    if (expected === undefined) return;
                     const readback = await axios.get(`${API_URL}/product/${offerId}`, {
                         headers: { Authorization: `Bearer ${props.authToken}`, "Cache-Control": "no-cache" },
                     });
                     const product = readback.data?.product ?? readback.data;
                     const { entries } = readShoperProductAttributes(product?.attributes ?? product?.attribute ?? []);
                     const actual = resolveImportedAdditionalFeatures(entries, additionalFeaturesAttribute.attribute_id, "");
-                    if (actual !== expected) {
-                        throw new Error("Shoper nie zapisał atrybutu „Dodatkowe cechy”. Sprawdź wartość w panelu Shopera.");
+                    if (actual.replace(/\r\n/g, "\n") !== expected.replace(/\r\n/g, "\n")) {
+                        return "Po aktualizacji Shoper zwrócił inną wartość atrybutu „Dodatkowe cechy” niż w formularzu. Sprawdź ten atrybut w panelu Shopera.";
                     }
                 },
             });
@@ -1377,6 +1380,10 @@ function AddPC(props: AddProductProps) {
     const shoper_diskSize = typeof rawDiskSize === 'string'
         ? rawDiskSize.replace(/^\s*(\d+(?:[.,]\d+)?)\s*GB\s*$/i, '$1') : rawDiskSize;
 
+    const assessment = useHardwareAssessment('pc', props.authToken, {
+        series:shoper_cpuName, cpu:shoper_cpuModel, cores:shoper_cpuCores, gpu:shoper_gpuName, gpuType:shoper_gpuType,
+        ram:shoper_ramSize, ramType:shoper_ramType, disk:shoper_diskType, capacity:shoper_diskSize, system:shoper_system,
+    });
     let shoper_dvd = watch(`attribute_${775}`);
     let shoper_CasePorts = watch(`attribute_${869}`);
     let shoper_MainBoardPorts = watch(`attribute_${1258}`);
@@ -2089,6 +2096,7 @@ function AddPC(props: AddProductProps) {
                                 <TemplateActionBar onAddPhotos={() => imageInputRef.current?.click()}
                                     photoCount={selectedImages.length} onManagePhotos={() => setIsImageManagerOpen(true)}>
                                     <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleResetShoperForm} />
+                                    {assessment.panel}
                                     <FormAssistant template="pc" token={props.authToken} control={control} attributes={attributeList}
                                         read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
                                         write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
@@ -2260,7 +2268,7 @@ function AddPC(props: AddProductProps) {
                         <AllegroOfferPreview description={buildOfficeAllegroDescription()} />
                     )}
                     {descriptionLanguage === 'description' && (
-                        <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
+                        <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: assessment.shoperDescription(description) }} />
                     )}
 
                     {descriptionLanguage === 'descriptionCZ' && (

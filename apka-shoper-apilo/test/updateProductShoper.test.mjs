@@ -18,6 +18,7 @@ const mocks = {
     'react-toastify': `export const toast = {
         success: (message) => globalThis.__shoperUpdateNotifications.push(['success', message]),
         warning: (message) => globalThis.__shoperUpdateNotifications.push(['warning', message]),
+        info: (message) => globalThis.__shoperUpdateNotifications.push(['info', message]),
         error: (message) => globalThis.__shoperUpdateNotifications.push(['error', message]),
     };`,
     '../config': `export const API_URL = 'http://localhost/api';`,
@@ -54,7 +55,7 @@ const input = {
     props: { authToken: 'test-token' },
 };
 
-test('writes form attributes after translations and verifies before reporting success', async () => {
+test('writes form attributes after translations and confirms the update before readback', async () => {
     requests.length = 0;
     notifications.length = 0;
     await UpdateProductShoper({
@@ -62,7 +63,7 @@ test('writes form attributes after translations and verifies before reporting su
         verify: async () => {
             assert.equal(requests.length, 3);
             assert.deepEqual(requests[2][1], { attributes: input.finalAttributes });
-            assert.equal(notifications.length, 0);
+            assert.equal(notifications[0][0], 'success');
         },
     });
     assert.deepEqual(requests.map(([, payload]) => payload), [
@@ -74,19 +75,11 @@ test('writes form attributes after translations and verifies before reporting su
     assert.deepEqual(notifications, [['success', 'Produkt w Shoperze został zaktualizowany.']]);
 });
 
-test('does not report success when Shoper readback differs from the form', async () => {
+test('a differing attribute is informational after a successful update', async () => {
     requests.length = 0;
     notifications.length = 0;
-    const previousConsoleError = console.error;
-    console.error = () => {};
-    try {
-        await assert.rejects(
-            UpdateProductShoper({ ...input, verify: async () => { throw new Error('Wartość nie została zapisana'); } }),
-            /Wartość nie została zapisana/,
-        );
-    } finally {
-        console.error = previousConsoleError;
-    }
+    const result = await UpdateProductShoper({ ...input, verify: async () => 'Inna wartość atrybutu' });
+    assert.deepEqual(result, {updated:true});
     assert.equal(requests.length, 3);
-    assert.deepEqual(notifications, []);
+    assert.deepEqual(notifications.map(([type]) => type), ['success','info']);
 });

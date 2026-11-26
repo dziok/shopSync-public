@@ -25,6 +25,7 @@ import { AddImageApilo } from "../backendQueries/addImageApilo";
 import { ApiloSubmitControls } from "./apiloSubmitControls";
 import { TemplateActionBar } from "./TemplateActionBar";
 import FormAssistant from "./FormAssistant";
+import { useHardwareAssessment } from "./useHardwareAssessment";
 import { UpdateProductShoper } from "../backendQueries/updateProductShoper";
 import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/shoperErrorMessage";
 import { getApiErrorMessage } from "../backendQueries/apiErrorMessage";
@@ -851,6 +852,11 @@ function AddLaptopNew(props: AddProductProps) {
     const shoper_cardReader = watch("attribute_332");
     const shoper_driveType = watch("attribute_339"); // Typ napędu (DVD/Blu-ray)
     const shoper_battery = watch("attribute_825");
+    const assessment = useHardwareAssessment('laptop-new', props.authToken, Object.fromEntries(
+        Object.entries({model:shoper_model, series:shoper_cpu, cpu:shoper_cpuModel, cores:shoper_cores, gpu:shoper_gpu,
+            ram:shoper_ramAmount, ramType:shoper_ramType, disk:shoper_diskType, capacity:shoper_diskSize,
+            screen:shoper_resolution, battery:shoper_battery, system:shoper_system}).map(([k,v]) => [k,resolveShoperOptionValue(undefined,v)])
+    ));
     const skipCaseDescription = skipCaseDescriptionAttrId
         ? coerceToBoolean(watch(`attribute_${skipCaseDescriptionAttrId}`))
         : false;
@@ -1334,7 +1340,7 @@ function AddLaptopNew(props: AddProductProps) {
                 impliedWarranty: { name: "Standardowe" },
                 returnPolicy: { name: "15 dni Myślenice" }
             },
-            description: descriptionAllegroTemplate,
+            description: { sections:[...descriptionAllegroTemplate.sections, ...assessment.allegroSections] },
         };
 
         try {
@@ -1773,7 +1779,7 @@ function AddLaptopNew(props: AddProductProps) {
                 translations: {
                     pl_PL: {
                         name: data.name,
-                        description: data.description + data.descriptionApilo,
+                        description: assessment.shoperDescription(data.description + data.descriptionApilo),
                         active: data.active
                     }
                 },
@@ -1925,7 +1931,7 @@ function AddLaptopNew(props: AddProductProps) {
                 translations: {
                     pl_PL: {
                         name: data.name,
-                        description: data.description + data.descriptionApilo,
+                        description: assessment.shoperDescription(data.description + data.descriptionApilo),
                         active: data.active,
                     },
                     cs_CZ: {
@@ -2735,39 +2741,42 @@ function AddLaptopNew(props: AddProductProps) {
     return (
         <div className="addProductMainContainer">
             <Box sx={{ display: 'flex', flexDirection: 'column', pb: 10 }}>
-                <TemplateActionBar onAddPhotos={() => imageInputRef.current?.click()}
-                    photoCount={selectedImages.length} onManagePhotos={() => setIsImageManagerOpen(true)}>
-                    <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleReset} />
-                    <FormAssistant template="laptop-new" token={props.authToken} control={control} attributes={attributeList}
-                        read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
-                        write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
-                        allegro={{ catalog: laptopParametersAllegro, values: formData, write: (key,value)=>setFormData(prev=>({...prev,[key]:value})), locked: isParamDisabled }} />
-                    <Button disabled={loading} variant="contained" onClick={handleAddAllegroOffer}>
-                        {loading ? (
-                            <>
-                                <CircularProgress size={18} sx={{ mr: 1 }} />
-                                Ładowanie…
-                            </>
-                        ) : (
-                            "+ Allegro"
-                        )}
-                    </Button>
-                    <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
-                        <Button variant="contained" color="success" onClick={handleSubmit(onSubmit)}>
-                            {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                <ThemeProvider theme={MainTheme}>
+                    <TemplateActionBar onAddPhotos={() => imageInputRef.current?.click()}
+                        photoCount={selectedImages.length} onManagePhotos={() => setIsImageManagerOpen(true)}>
+                        <TemplateResetButton disabled={loading || loadingShoperOffer || updatingProduct} beforeReset={handleReset} />
+                        {assessment.panel}
+                        <FormAssistant template="laptop-new" token={props.authToken} control={control} attributes={attributeList}
+                            read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty || importedFields.has(key)}
+                            write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
+                            allegro={{ catalog: laptopParametersAllegro, values: formData, write: (key,value)=>setFormData(prev=>({...prev,[key]:value})), locked: isParamDisabled }} />
+                        <Button disabled={loading} variant="contained" onClick={handleAddAllegroOffer}>
+                            {loading ? (
+                                <>
+                                    <CircularProgress size={18} sx={{ mr: 1 }} />
+                                    Ładowanie…
+                                </>
+                            ) : (
+                                "+ Allegro"
+                            )}
                         </Button>
-                    </ApiloSubmitControls>
-                    <Button variant="contained" color="warning" disabled={updatingProduct} onClick={handleSubmit(handleUpdateProduct)}>
-                        {updatingProduct ? (
-                            <>
-                                <CircularProgress size={18} sx={{ mr: 1 }} />
-                                Aktualizowanie…
-                            </>
-                        ) : (
-                            "Aktualizuj Shoper"
-                        )}
-                    </Button>
-                </TemplateActionBar>
+                        <ApiloSubmitControls addToApilo={addToApilo} onChange={setAddToApilo}>
+                            <Button variant="contained" color="success" onClick={handleSubmit(onSubmit)}>
+                                {addToApilo ? "+ Shoper, Apilo" : "+ Shoper"}
+                            </Button>
+                        </ApiloSubmitControls>
+                        <Button variant="contained" color="warning" disabled={updatingProduct} onClick={handleSubmit(handleUpdateProduct)}>
+                            {updatingProduct ? (
+                                <>
+                                    <CircularProgress size={18} sx={{ mr: 1 }} />
+                                    Aktualizowanie…
+                                </>
+                            ) : (
+                                "Aktualizuj Shoper"
+                            )}
+                        </Button>
+                    </TemplateActionBar>
+                </ThemeProvider>
                 {/* Formularz dodawania produktu */}
                 <form className="shoper-import-form" onChangeCapture={onImportedFieldChange} onReset={clearImportedFields} onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column' }}>
                     <ShoperImportedFieldStyles fields={importedFields} />
@@ -3655,7 +3664,7 @@ function AddLaptopNew(props: AddProductProps) {
             {/* Podgląd opisu w wybranym języku */}
             <div className="preview">
                 {descriptionLanguage === "description" && (
-                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description + descriptionApilo }} />
+                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: assessment.shoperDescription(description + descriptionApilo) }} />
                 )}
                 {descriptionLanguage === "descriptionCZ" && (
                     <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: descriptionCZ }} />
@@ -3663,7 +3672,7 @@ function AddLaptopNew(props: AddProductProps) {
                 {descriptionLanguage === "descriptionSK" && (
                     <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: descriptionSK }} />
                 )}
-                {descriptionLanguage === "descriptionAllegro" && renderAllegroPreview()}
+                {descriptionLanguage === "descriptionAllegro" && <>{renderAllegroPreview()}{assessment.allegroHtml && <div dangerouslySetInnerHTML={{__html:assessment.allegroHtml}} />}</>}
             </div>
         </div>
     );

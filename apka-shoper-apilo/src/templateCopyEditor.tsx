@@ -8,7 +8,7 @@ import { createFilterOptions } from '@mui/material/Autocomplete';
 import catalog from 'virtual:listing-copy';
 import { getTemplateDescriptionCatalog, type CopyEntry } from './templateDescriptionCatalog';
 import type { Language, TemplateKey } from './templateSettings';
-import { editableOptionHtml, legacyPartKeys } from './templateCopy';
+import { editableOptionHtml, inheritedBlock, legacyPartKeys, sanitizeInlineCopy } from './templateCopy';
 import OfficeRowEditor from './officeRowEditor';
 import { officeRowDefault } from './addProduct/officeSpecRows';
 const filterOptions = createFilterOptions<CopyEntry>({ stringify: e => e.label + ' ' + e.original });
@@ -54,14 +54,14 @@ export default function TemplateCopyEditor({ authToken, template, language, edit
     const [selected,select] = useState('');
     const entry = options.find(e => e.id === selected) ?? options[0];
     if (!entry) return <Typography variant="body2">Brak wbudowanych opisów w tym języku.</Typography>;
-    const inherited = (e: CopyEntry) => e.row ? officeRowDefault(e.row, id => edits[id]) : e.original;
-    const modified = (item: CopyEntry) => item.row ? (edits[item.id] ?? inherited(item)) !== item.original :
+    const inherited = (e: CopyEntry) => e.leaves ? inheritedBlock(e.original,e.leaves,edits) : e.row ? officeRowDefault(e.row, id => edits[id]) : e.original;
+    const modified = (item: CopyEntry) => item.row || item.leaves ? (edits[item.id] ?? inherited(item)) !== item.original :
         edits[item.id] !== undefined || (item.html && legacyPartKeys(edits, item.id).length > 0);
     const value = entry.html ? editableOptionHtml(entry.original, entry.id, edits) : edits[entry.id] ?? inherited(entry);
     function change(value?: string) {
         const next = { ...edits };
         if (entry.html) for (const key of legacyPartKeys(next, entry.id)) delete next[key];
-        if (entry.row && (value === undefined || value === entry.original) && inherited(entry) !== entry.original) next[entry.id] = entry.original;
+        if ((entry.row || entry.leaves) && (value === undefined || value === entry.original) && inherited(entry) !== entry.original) next[entry.id] = entry.original;
         else if (value === undefined || value === entry.original) delete next[entry.id];
         else next[entry.id] = value;
         onChange(next);
@@ -85,9 +85,11 @@ export default function TemplateCopyEditor({ authToken, template, language, edit
             <Button size="small" onClick={() => setReload(n => n + 1)}>Ponów</Button>
         </Typography>}
         {entry.row ? <OfficeRowEditor key={entry.id} row={entry.row} value={value} onChange={change} /> :
-        <TextField label={entry.html ? 'Kod HTML opisu' : 'Treść opisu'} value={value} multiline minRows={entry.html ? 10 : 3} maxRows={22} fullWidth
+        <TextField label={entry.leaves ? 'Treść akapitu (HTML)' : entry.html ? 'Kod HTML opisu' : 'Treść opisu'} value={value} multiline minRows={entry.html ? 10 : 3} maxRows={22} fullWidth
             helperText={entry.html ? 'Formatowanie, listy, klasy i zdjęcia są obsługiwane. Skrypty, zdarzenia i style inline są pomijane w zmienionym HTML.' : undefined}
             inputProps={{maxLength:12000, ...(entry.html && { spellCheck: false, style: { fontFamily: 'monospace' } })}} onChange={e => change(e.target.value)} />}
+        {entry.leaves && <div><Typography variant="caption" color="text.secondary">Podgląd akapitu</Typography>
+            <div dangerouslySetInnerHTML={{ __html: sanitizeInlineCopy(value) }} /></div>}
         {modified(entry) && <div>
             <details><summary>Tekst domyślny</summary><Typography sx={{ whiteSpace: 'pre-wrap' }}>{entry.original || '(pusty)'}</Typography></details>
             <Button onClick={() => change()}>Przywróć domyślny opis</Button>

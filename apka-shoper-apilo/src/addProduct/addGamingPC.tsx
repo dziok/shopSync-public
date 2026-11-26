@@ -53,6 +53,7 @@ import { ResponsibleProducerSelect, ResponsibleResponse } from "./allegroCompone
 import { ApiloSubmitControls } from "./apiloSubmitControls";
 import { TemplateActionBar } from "./TemplateActionBar";
 import FormAssistant from "./FormAssistant";
+import { useHardwareAssessment } from "./useHardwareAssessment";
 import { getCreatedShoperProductId, getExactApiloProductId } from "./gamingProductTargets";
 
 type AddProductProps = {
@@ -655,7 +656,7 @@ function AddGamingPC(props: AddProductProps) {
                         translations: {
                             pl_PL: {
                                 name: titles.pl,
-                                description: description,
+                                description: assessment.shoperDescription(description),
                                 active: data.active,
                             },
 
@@ -899,6 +900,12 @@ function AddGamingPC(props: AddProductProps) {
     let Price = watch("price", 0);
     let Stock = watch("stock", 0);
     let SKU = watch("SKU", '');
+    const assessment = useHardwareAssessment('gaming', props.authToken, {
+        series:convertedFormData["Seria"], cpu:convertedFormData["Model procesora"], cores:convertedFormData["Liczba rdzeni procesora"],
+        gpu:convertedFormData["Chipset karty graficznej"], gpuType:convertedFormData["Rodzaj karty graficznej"],
+        ram:convertedFormData["Wielkość pamięci RAM"], ramType:convertedFormData["Typ pamięci RAM"],
+        disk:convertedFormData["Typ dysku twardego"], capacity:convertedFormData["Pojemność dysku"], system:convertedFormData["System operacyjny"],
+    });
     let condition = watch("condition", '');
     let set = watch("set", '');
     let connectProductAllegro = watch("connectProductAllegro", true);
@@ -958,7 +965,7 @@ function AddGamingPC(props: AddProductProps) {
         const ramDesc = gaming_ramTypesDescriptions[ramDescription as keyof typeof gaming_ramTypesDescriptions] || "";
         const diskDesc = gaming_diskTypesDescriptions[diskDescription as keyof typeof gaming_diskTypesDescriptions] || "";
 
-        return gamingTemplateAllegro(
+        const base = gamingTemplateAllegro(
             data["Model procesora"] || "",
             data["Chipset karty graficznej"] || "",
             [data["Producent płyty głównej"], data["Model płyty głównej"]].filter(Boolean).join(" "),
@@ -989,6 +996,7 @@ function AddGamingPC(props: AddProductProps) {
             cpuFanModel,
             set
         );
+        return { sections:[...base.sections, ...assessment.allegroSections] };
     };
 
     //Odświerzanie opisu
@@ -1512,6 +1520,7 @@ function AddGamingPC(props: AddProductProps) {
                         <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
                             photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
                             <TemplateResetButton disabled={loading || images.uploadingImages} />
+                            {assessment.panel}
                             <FormAssistant template="gaming" token={props.authToken} control={control}
                                 read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty}
                                 write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })}
@@ -1546,7 +1555,7 @@ function AddGamingPC(props: AddProductProps) {
                 )}
 
                 {descriptionLanguage === 'description' && (
-                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
+                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: assessment.shoperDescription(description) }} />
 
                 )}
 

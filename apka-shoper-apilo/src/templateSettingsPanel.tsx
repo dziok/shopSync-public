@@ -93,7 +93,7 @@ export default function TemplateSettingsPanel({ authToken, allegroAccountId, ini
         });
     };
     const save = async () => {
-        if (key === 'pc') for (const entry of officeCatalog()) {
+        if (key === 'pc' || key === 'gaming') for (const entry of officeCatalog(key)) {
             const source = draft.description.copy?.[entry.id];
             if (source === undefined || !entry.row) continue;
             const error = rowError(entry.row,source);

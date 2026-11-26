@@ -6,6 +6,27 @@ describe('BulkAiService', () => {
     } }) } as any);
     const originalFetch = global.fetch;
 
+    it('scores all five workloads independently and allows unknown gaming performance', async () => {
+        jest.spyOn(service as any,'readSettings').mockResolvedValue({apiKey:'test',model:'test'});
+        const grades = Object.fromEntries(['home','work','study','games','pro'].map(k => [k,{
+            score:k === 'games' ? null : 10, reason:k === 'games' ? 'Brak modelu GPU.' : 'Ocena na podstawie CPU i RAM.',
+        }]));
+        const response = data => ({ok:true,json:async () => ({status:'completed',output:[{content:[
+            {type:'output_text',text:JSON.stringify(data)},
+        ]}]})});
+        global.fetch = jest.fn().mockResolvedValueOnce(response(grades)).mockResolvedValueOnce(response({...grades,pro:undefined}))
+            .mockResolvedValueOnce(response({...grades,home:{score:11,reason:'Poza skalą'}}));
+        const input = {template:'pc',hardware:{cpu:'i5-8500',ram:'16 GB'}};
+        const rows = await service.suitability(input);
+        expect(rows).toHaveLength(5);
+        expect(rows.find(r => r.key === 'games')).toMatchObject({score:null,reason:'Brak modelu GPU.'});
+        await expect(service.suitability(input)).rejects.toThrow('kompletu pięciu ocen');
+        await expect(service.suitability(input)).rejects.toThrow('kompletu pięciu ocen');
+        await expect(service.suitability({...input,hardware:{ram:'16 GB'}})).rejects.toThrow('procesor');
+        await expect(service.suitability({...input,hardware:{...input.hardware,serial:'private'}})).rejects.toThrow();
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
     afterEach(() => {
         global.fetch = originalFetch;
         jest.restoreAllMocks();

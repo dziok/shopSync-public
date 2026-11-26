@@ -14,6 +14,23 @@ async function load(contents, resolveDir = root) {
 }
 const common = "export { installTemplateCopy } from './templateCopy';";
 
+test('formatted sentences edit as a unit without losing legacy text or crossing dynamic boundaries', async t => {
+    const dom = new JSDOM();
+    globalThis.window = dom.window;
+    t.after(() => { delete globalThis.window; dom.window.close(); });
+    const source = 'export const render = system => `<p>Pakiet <b>Calc</b> i Writer. <span class="conditional">${system}</span></p>`';
+    const {code, entries} = compileCopy(source, 'templates/example.ts', 'pc');
+    assert.equal(entries.length, 1);
+    const [block] = entries;
+    assert.equal(block.label, 'Pakiet Calc i Writer.');
+    const {render, installTemplateCopy} = await load(code + '\n' + common);
+    assert.equal(render('Windows'), '<p>Pakiet <b>Calc</b> i Writer. <span class="conditional">Windows</span></p>');
+    installTemplateCopy({templates:{pc:{description:{copy:{[block.leaves[1][2]]:'Arkusz & tekst'}}}}});
+    assert.match(render('Windows'), /<b>Arkusz &amp; tekst<\/b>/);
+    installTemplateCopy({templates:{pc:{description:{copy:{[block.id]:'Nowy <i>opis</i><script>bad()</script>'}}}}});
+    assert.equal(render('Linux'), '<p>Nowy <i>opis</i> <span class="conditional">Linux</span></p>');
+});
+
 test('office specification edits reorder complete rows without changing adjacent rows or conditions', async t => {
     const dom = new JSDOM();
     globalThis.window = dom.window;
@@ -36,6 +53,31 @@ test('office specification edits reorder complete rows without changing adjacent
     args[7] = 'brak dysku';
     assert.match(PcApiloSpecyfication(...args), /Brak dysku w zestawie/);
     assert.doesNotMatch(PcApiloSpecyfication(...args), /Zainstalowany system/);
+});
+
+test('gaming Allegro edits the power supply as one row and inherits old label and unit edits', async t => {
+    const dom = new JSDOM();
+    globalThis.window = dom.window;
+    t.after(() => { delete globalThis.window; dom.window.close(); });
+    const path = 'templates/gamingTemplate.ts';
+    const file = resolve(root, 'addProduct', path);
+    const { code, entries } = compileCopy(await readFile(file, 'utf8'), path, 'gaming');
+    assert.ok(!entries.some(e => e.group === 'Tekst Allegro' && ['W','GB'].includes(e.original)));
+    const { gamingTemplateAllegro, installTemplateCopy, officeCatalog } = await load(code +
+        "\nexport {installTemplateCopy} from '../../templateCopy';export {officeCatalog} from '../officeSpecRows';", resolve(file,'..'));
+    const power = officeCatalog('gaming').find(e => e.label === 'Zasilacz');
+    assert.ok(power && !officeCatalog().some(e => e.id === power.id));
+    const render = watts => {
+        const args = Array(29).fill('');
+        args[3] = watts; args[24] = 'Corsair'; args[28] = 'brak';
+        return gamingTemplateAllegro(...args).sections[1].items[0].content;
+    };
+    assert.match(render('750'), /<li>Zasilacz: <b>Corsair 750W<\/b><\/li>/);
+    const copy = {'pl:tekst:8e8e3c22df93fd2c9fe3246f':'PSU:', 'pl:tekst:eb9547a36ac64c8a7c83c8e0':' watów'};
+    installTemplateCopy({templates:{gaming:{description:{copy}}}});
+    assert.match(render('650'), /PSU: <b>Corsair 650 watów<\/b>/);
+    copy[power.id] = 'Moc: {{moc}} W ({{zasilacz}})';
+    assert.match(render('850'), /<li>Moc: 850 W \(Corsair\)<\/li>/);
 });
 
 test('every active template has editable defaults without selecting a product first', async () => {

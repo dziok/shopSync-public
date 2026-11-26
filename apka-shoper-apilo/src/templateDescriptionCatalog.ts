@@ -8,7 +8,7 @@ import { genericAmdDescriptions, homeAssistantSupportNotice } from './addProduct
 import { aioStandLabels } from './addProduct/aioStand';
 import { officeCatalog, type OfficeRow } from './addProduct/officeSpecRows';
 
-export type CopyEntry = { id: string; group: string; label: string; language: Language; original: string; html?: boolean; row?: OfficeRow };
+export type CopyEntry = { id: string; group: string; label: string; language: Language; original: string; html?: boolean; row?: OfficeRow; leaves?: import('./templateCopy').CopyLeaf[] };
 type Dictionary = Record<string, string>;
 type Group = [string, ...Record<string, Dictionary>[]];
 const languages: Language[] = ['pl','cz','sk'];
@@ -61,7 +61,7 @@ export function getTemplateDescriptionCatalog(key: TemplateKey): CopyEntry[] {
     if (key === 'custom') entries.push({ id: 'pl:Produkt:Opis początkowy', group: 'Produkt', label: 'Opis początkowy', language: 'pl', original: '' });
     if (key === 'pc') for (const [label, values] of Object.entries(aioStandLabels)) for (const language of languages)
         entries.push({ id: language + ':Podstawka AIO:' + label, group: 'Podstawka AIO', label, language, original: values[language] });
-    if (key === 'pc') entries.push(...officeCatalog());
+    if (key === 'pc' || key === 'gaming') entries.push(...officeCatalog(key));
     return entries;
 }
 export function templateDictionaries(key: TemplateKey) {

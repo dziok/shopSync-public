@@ -1,4 +1,21 @@
 {
+  "Parametry zestawu": {
+    "Procesor": "pl:tekst:529da1649b8e1f8de93afbfa",
+    "Karta Graficzna": "pl:tekst:bd1b96d7b2f60405e62fd7cc",
+    "Pamięć RAM": "pl:tekst:2ccbd6fd7c3c74c9403c6e34",
+    "Dysk": "pl:tekst:239dbf6be83d3eef606aa590",
+    "GB": "pl:tekst:446ed1efef9d5093b49ebe99",
+    "Procesor:": "pl:tekst:05e7669d28cf3d2a194d4dfd",
+    "Karta Graficzna:": "pl:tekst:72cdf7f170c3b03af0db4c63",
+    "Płyta główna:": "pl:tekst:bd1272f6e5a56c039619890e",
+    "Zasilacz:": "pl:tekst:8e8e3c22df93fd2c9fe3246f",
+    "W": "pl:tekst:eb9547a36ac64c8a7c83c8e0",
+    "Pamięć RAM:": "pl:tekst:8000ed1cfa57a5068f071e12",
+    "Obudowa:": "pl:tekst:6706566ba3e64375269d5a65",
+    "Chłodzenie CPU:": "pl:tekst:e13cd84550d97c3cdc6f1b21",
+    "System operacyjny:": "pl:tekst:147ffe7d72ca7013069117b6",
+    "Porty obudowy:": "pl:tekst:691970cf4f1ebe274e681555"
+  },
   "Specyfikacja techniczna": {
     "Brak dysku w zestawie": "pl:tekst:30cb3de324c0bfc263dc6391",
     "Brak systemu operacyjnego": "pl:tekst:0a11d0ec918543e68f80edf3",

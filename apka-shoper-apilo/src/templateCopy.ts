@@ -14,6 +14,20 @@ export function templateCopy(key: TemplateKey, id: string, fallback: string) {
 export function savedCopy(key: TemplateKey, id: string) {
     return settings?.templates[key]?.description.copy?.[id];
 }
+export type CopyLeaf = [number, number, string];
+export function inheritedBlock(original: string, leaves: CopyLeaf[], edits?: Record<string,string>) {
+    if (!edits) return original;
+    let result = original;
+    for (let i = leaves.length - 1; i >= 0; i--) {
+        const [start,end,id] = leaves[i];
+        if (edits[id] !== undefined) result = result.slice(0,start) + escapeCopy(edits[id]) + result.slice(end);
+    }
+    return result;
+}
+export function listingBlock(key: TemplateKey, id: string, original: string, leaves: CopyLeaf[]) {
+    const edits = settings?.templates[key]?.description.copy;
+    return edits?.[id] === undefined ? inheritedBlock(original, leaves, edits) : sanitizeInlineCopy(edits[id]);
+}
 export function isOptionHtml(html: string) {
     return /<[a-z][\w-]*[\s>]/i.test(html);
 }

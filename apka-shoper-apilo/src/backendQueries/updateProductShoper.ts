@@ -20,7 +20,7 @@ type UpdateProductShoperInput = {
     props: UpdateProductProps;
     baseSuccessMessage?: string;
     finalAttributes?: Record<number, string>;
-    verify?: () => Promise<void>;
+    verify?: () => Promise<string | void>;
 };
 
 const getLangLabel = (lang: string) => {
@@ -67,13 +67,22 @@ export const UpdateProductShoper = async ({
         if (finalAttributes) {
             await axios.put(url, { attributes: finalAttributes }, { headers });
         }
-        if (verify) await verify();
         if (failedTranslations.length) {
             toast.warning(`Produkt #${productId} zaktualizowano częściowo. Niezapisane wersje:\n${failedTranslations.join('\n')}`);
         } else {
             toast.success(baseSuccessMessage || "Produkt w Shoperze został zaktualizowany.");
         }
 
+        if (verify) {
+            let notice: string | void;
+            try {
+                notice = await verify();
+            } catch (error) {
+                console.warn("Nie udało się zweryfikować danych po aktualizacji Shopera:", error);
+                notice = "Nie udało się odczytać danych kontrolnych po aktualizacji. Sprawdź atrybuty w panelu Shopera.";
+            }
+            if (notice) toast.info(notice);
+        }
         return response.data;
     } catch (error) {
         if (axios.isAxiosError(error)) {

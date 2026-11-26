@@ -3,6 +3,19 @@ import { escapeCopy, savedCopy, sanitizeInlineCopy } from '../templateCopy';
 import legacy from './officeSpecLegacy.json';
 
 const lines = {
+    gamingCpu: ['Procesor', 'Procesor: <b>{{seria}} {{model}}</b>'],
+    gamingGpu: ['Karta graficzna', 'Karta Graficzna: <b>{{grafika}}</b>'],
+    gamingBoard: ['Płyta główna', 'Płyta główna: <b>{{plyta}}</b>'],
+    gamingPower: ['Zasilacz', 'Zasilacz: <b>{{zasilacz}} {{moc}}W</b>'],
+    gamingRam: ['Pamięć RAM', 'Pamięć RAM: <b>{{ram}} {{parametry}}</b>'],
+    gamingCase: ['Obudowa', 'Obudowa: <b>{{obudowa}} {{nazwa}}</b>'],
+    gamingFan: ['Chłodzenie CPU', 'Chłodzenie CPU: <b>{{chlodzenie}}</b>'],
+    gamingSystem: ['System operacyjny', 'System operacyjny: <b>{{system}}</b>'],
+    gamingPorts: ['Porty obudowy', 'Porty obudowy: <b>{{porty}}</b>'],
+    gamingDiskTitle: ['Nagłówek dysku', ' Dysk {{pojemnosc}} GB'],
+    gamingCpuTitle: ['Nagłówek procesora', ' Procesor {{seria}} {{model}}'],
+    gamingRamTitle: ['Nagłówek RAM', ' Pamięć RAM {{parametry}}'],
+    gamingGpuTitle: ['Nagłówek grafiki', ' Karta Graficzna {{grafika}}'],
     cpu: ['Procesor', ' {{rdzenie}}-rdzeniowy procesor <b>{{seria}}-{{model}}</b>, taktowanie <b>{{bazowe}}GHz</b> w trybie turbo <b>{{turbo}}GHz</b>'],
     ram: ['Pamięć RAM', ' Pamięć operacyjna <b>{{pojemnosc}} {{typ}}</b>'],
     disk: ['Dysk', ' Dysk: <b>{{typ}} {{pojemnosc}} GB</b>'],
@@ -29,7 +42,8 @@ const lines = {
 } as const;
 
 export type OfficeRow = keyof typeof lines;
-const group = (key: OfficeRow) => key.endsWith('Title') ? 'Nagłówki podzespołów' :
+const templateOf = (key: OfficeRow) => key.startsWith('gaming') ? 'gaming' : 'pc';
+const group = (key: OfficeRow) => templateOf(key) === 'gaming' ? 'Parametry zestawu' : key.endsWith('Title') ? 'Nagłówki podzespołów' :
     ['resolution','panel','size','frequency','touch','mic','camera','stand'].includes(key) ? 'Specyfikacja AIO' : 'Specyfikacja techniczna';
 const rowId = (key: OfficeRow) => 'pl:wiersz:' + key;
 const slots = /\{\{([a-z]+)\}\}/g;
@@ -52,6 +66,8 @@ const example: Record<string,string> = {
     opis:'Rodzaj obudowy:', grafika:'Intel UHD Graphics 630', wyposazenie:'Kabel zasilający', naped:'DVD',
     porty:'USB, DisplayPort', rozdzielczosc:'1920 × 1080', matryca:'IPS', przekatna:'24″', odswiezanie:'60 Hz',
     dotyk:'Tak', mikrofon:'Nie', kamera:'Tak', podstawka:'oryginalna',
+    zasilacz:'Corsair RM750', moc:'750', plyta:'B760', ram:'Kingston Fury', parametry:'32 GB DDR5',
+    obudowa:'Corsair', nazwa:'4000D', chlodzenie:'Fortis 5',
 };
 export function previewOfficeRow(row: OfficeRow, source: string) {
     const ram = row === 'ram' || row === 'ramTitle';
@@ -59,8 +75,8 @@ export function previewOfficeRow(row: OfficeRow, source: string) {
     return sanitizeInlineCopy(source.replace(slots, (token,name:string) => fields[name] ?? token));
 }
 
-export function officeCatalog(): CopyEntry[] {
-    return (Object.keys(lines) as OfficeRow[]).map(row => ({
+export function officeCatalog(template: 'pc' | 'gaming' = 'pc'): CopyEntry[] {
+    return (Object.keys(lines) as OfficeRow[]).filter(row => templateOf(row) === template).map(row => ({
         row, id:rowId(row), language:'pl', group:'Allegro → ' + group(row), label:lines[row][0], original:lines[row][1],
     }));
 }
@@ -77,7 +93,7 @@ export function officeRowDefault(row: OfficeRow, lookup: (id:string) => string |
 }
 
 export function officeRow(row:OfficeRow, fields:Record<string,unknown> = {}) {
-    const lookup = (id:string) => savedCopy('pc',id);
+    const lookup = (id:string) => savedCopy(templateOf(row),id);
     const edit = lookup(rowId(row));
     const source = edit ?? officeRowDefault(row,lookup);
     const html = source.replace(slots, (_, name:string) => {

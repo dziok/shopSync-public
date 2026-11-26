@@ -1,3 +1,5 @@
+import { officeRow as specificationRow } from '../officeSpecRows';
+
 export const gamingTemplate = (
     cpuName: string,
     gpuName: string,
@@ -131,6 +133,7 @@ export const gamingTemplate = (
 
                 </div>
             </div>
+            <!--shopsync:gaming-assessment-->
             <div >
             <img class="g_img_tr g_kr_white"  onerror="this.onerror=null; this.src='../g_kr1.svg';" src="/userdata/public/assets/gaming/g_kr1.svg"  />
             </div>
@@ -957,14 +960,14 @@ export const gamingTemplateAllegro = (
                         content: `
                             <h2>🛠️ Najważniejsze parametry zestawu</h2>
                             <ul>
-                                <li>Procesor: <b>${cpuSeries} ${cpuName}</b></li>
-                                <li>Karta Graficzna: <b>${gpuName}</b></li>
-                                <li>Płyta główna: <b>${mainBoardName}</b></li>
-                                <li>Zasilacz: <b>${powerSupplyModel} ${powerSupplyName}W</b></li>
-                                <li>Pamięć RAM: <b>${ramModel} ${ramName}</b></li>
-                                <li>Obudowa: <b>${caseModel} ${caseName}</b></li>
-                                <li>Chłodzenie CPU: <b>${cpuFanModel || "dostosowane do zestawu"}</b></li>
-                                <li>System operacyjny: <b>${system}</b></li>
+                                <li>${specificationRow('gamingCpu', { seria: cpuSeries, model: cpuName })}</li>
+                                <li>${specificationRow('gamingGpu', { grafika: gpuName })}</li>
+                                <li>${specificationRow('gamingBoard', { plyta: mainBoardName })}</li>
+                                <li>${specificationRow('gamingPower', { zasilacz: powerSupplyModel, moc: powerSupplyName })}</li>
+                                <li>${specificationRow('gamingRam', { ram: ramModel, parametry: ramName })}</li>
+                                <li>${specificationRow('gamingCase', { obudowa: caseModel, nazwa: caseName })}</li>
+                                <li>${specificationRow('gamingFan', { chlodzenie: cpuFanModel || 'dostosowane do zestawu' })}</li>
+                                <li>${specificationRow('gamingSystem', { system })}</li>
                                 ${set != "brak" ? `<li>Monitor: <b>Acer 24" 75Hz Full HD</b></li>` : ""}
                                 ${set == "tani" ? `<li>Mysz: <b>Tracer Boost</b></li>` : ""}
                                 ${set == "tani" ? `<li>Klawiatura: <b>Tracer Boost</b></li>` : ""}
@@ -977,7 +980,7 @@ export const gamingTemplateAllegro = (
                     
                             ${additionalInfo ? `<p>❗ ${additionalInfo}</p>` : ""}
                             
-                            <p>Porty obudowy: <b>${CasePorts}</b></p>
+                            <p>${specificationRow('gamingPorts', { porty: CasePorts })}</p>
                             <p>✅ Komputer jest w pełni gotowy do pracy zaraz po wyjęciu z opakowania.</p>
                             <p>✅ Złożony ręcznie przez specjalistę z użyciem komponentów: <b>${components}</b></p>
                             <p>✅ Każdy egzemplarz jest testowany pod obciążeniem, aby zapewnić <b>maksymalną stabilność i niezawodność</b>.</p>
@@ -994,7 +997,7 @@ export const gamingTemplateAllegro = (
                     },
                     {
                         type: "TEXT",
-                        content: `<h2> Karta Graficzna ${gpuName}</h2><p>${gpuDescription}</p>`
+                        content: `<h2>${specificationRow('gamingGpuTitle', { grafika: gpuName })}</h2><p>${gpuDescription}</p>`
                     }
                 ]
             },
@@ -1002,7 +1005,7 @@ export const gamingTemplateAllegro = (
                 items: [
                     {
                         type: "TEXT",
-                        content: ` <h2> Procesor ${cpuSeries} ${cpuName}</h2><p>${cpuDescription}</p>`
+                        content: ` <h2>${specificationRow('gamingCpuTitle', { seria: cpuSeries, model: cpuName })}</h2><p>${cpuDescription}</p>`
                     },
                     {
                         type: "IMAGE",
@@ -1019,7 +1022,7 @@ export const gamingTemplateAllegro = (
                     },
                     {
                         type: "TEXT",
-                        content: `<h2> Pamięć RAM ${ramName}</h2><p>${ramDescription}</p>`
+                        content: `<h2>${specificationRow('gamingRamTitle', { parametry: ramName })}</h2><p>${ramDescription}</p>`
                     }
                 ]
             },
@@ -1027,7 +1030,7 @@ export const gamingTemplateAllegro = (
                 items: [
                     {
                         type: "TEXT",
-                        content: `<h2> Dysk ${diskName} GB</h2><p>${diskDescription}</p>`
+                        content: `<h2>${specificationRow('gamingDiskTitle', { pojemnosc: diskName })}</h2><p>${diskDescription}</p>`
                     },
                     {
                         type: "IMAGE",

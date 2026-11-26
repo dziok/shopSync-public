@@ -39,32 +39,73 @@ export function compileCopy(source, filename, key) {
         const section = filename === 'addPc.tsx' && ownerName === 'buildOfficeAllegroDescription' ? 'handleAddAllegroOffer' : ownerName;
         const channel = /allegro/i.test(filename + section) ? 'Allegro' : /apilo/i.test(filename + section) ? 'Apilo' : 'szablonu';
         const ranges = [];
+        const blocks = [];
+        const textId = original => language + ':tekst:' + createHash('sha256').update([filename,section,original.replace(/\s+/g,' ')].join('\n')).digest('hex').slice(0,24);
+        function inlineNode(el) {
+            const loc = el.sourceCodeLocation;
+            if (!loc || html.slice(loc.startOffset, loc.endOffset).includes(marker)) return false;
+            if (el.nodeName === '#text') return true;
+            return ['b','strong','i','em','u','sup','sub','br'].includes(el.tagName) && !el.attrs.length &&
+                (el.tagName === 'br' || !!loc.endTag) && el.childNodes.every(inlineNode);
+        }
         function scan(el) {
             if (['style','script','svg','textarea','template'].includes(el.tagName)) return;
             if (el.nodeName === '#text' && el.sourceCodeLocation) {
                 ranges.push(el.sourceCodeLocation);
             }
-            el.childNodes?.forEach(scan);
+            let run = [];
+            function flush() {
+                if (run.some(c => c.tagName) && run.length > 1) {
+                    const first = run[0].sourceCodeLocation.startOffset;
+                    const raw = html.slice(first, run.at(-1).sourceCodeLocation.endOffset);
+                    const original = raw.trim();
+                    const startOffset = first + raw.indexOf(original);
+                    const endOffset = startOffset + original.length;
+                    const leaves = ranges.filter(r => r.startOffset < endOffset && r.endOffset > startOffset)
+                        .flatMap(r => {
+                            const text = html.slice(r.startOffset, r.endOffset), trimmed = text.trim();
+                            if (!/\p{L}/u.test(trimmed)) return [];
+                            const start = r.startOffset + text.indexOf(trimmed) - startOffset;
+                            return [[start, start + trimmed.length, textId(trimmed)]];
+                        });
+                    if (leaves.length > 1 && original.length <= 12000) blocks.push({ startOffset, endOffset, leaves });
+                }
+                run = [];
+            }
+            for (const child of el.childNodes ?? []) {
+                if (!inlineNode(child)) { flush(); scan(child); continue; }
+                run.push(child);
+                function collect(n) {
+                    if (n.nodeName === '#text') ranges.push(n.sourceCodeLocation);
+                    else n.childNodes.forEach(collect);
+                }
+                collect(child);
+            }
+            flush();
         }
         scan(parseFragment(html, { sourceCodeLocationInfo: true }));
-        ranges.sort((a,b) => a.startOffset - b.startOffset);
+        const segments = [...ranges.filter(r => !blocks.some(b => r.startOffset < b.endOffset && r.endOffset > b.startOffset)), ...blocks]
+            .sort((a,b) => a.startOffset - b.startOffset);
         let offset = 0;
         parts.forEach((part, i) => {
             const end = offset + part.length;
             if (ts.isTemplateExpression(node) && i < node.templateSpans.length &&
                 ranges.some(r => r.startOffset <= end && r.endOffset > end)) markValue(node.templateSpans[i].expression);
             let pos = 0, code = '';
-            for (const range of ranges) {
+            for (const range of segments) {
                 const start = Math.max(offset, range.startOffset) - offset;
                 const stop = Math.min(end, range.endOffset) - offset;
                 if (stop <= start || start < pos) continue;
                 const segment = part.slice(start, stop);
                 const original = segment.trim();
                 if (!/\p{L}/u.test(original)) continue;
-                const id = language + ':tekst:' + createHash('sha256').update([filename,section,original.replace(/\s+/g,' ')].join('\n')).digest('hex').slice(0,24);
-                entries.set(id, { id, language, group: 'Tekst ' + channel, label: original.replace(/\s+/g,' ').slice(0,120), original });
+                const id = range.leaves ? textId(original).replace(':tekst:', ':akapit:') : textId(original);
+                const label = (range.leaves ? original.replace(/<[^>]+>/g,'') : original).replace(/\s+/g,' ').slice(0,120);
+                entries.set(id, { id, language, group: 'Tekst ' + channel, label, original, ...(range.leaves && { leaves: range.leaves }) });
                 const left = start + segment.indexOf(original);
-                code += quote(part.slice(pos, left)) + '${__listingCopy(' + [key,id,original].map(s => JSON.stringify(s)).join(',') + ')}';
+                const args = [key,id,original];
+                if (range.leaves) args.push(range.leaves);
+                code += quote(part.slice(pos, left)) + '${' + (range.leaves ? '__listingBlock' : '__listingCopy') + '(' + args.map(s => JSON.stringify(s)).join(',') + ')}';
                 pos = left + original.length;
             }
             if (pos) {
@@ -90,7 +131,7 @@ export function compileCopy(source, filename, key) {
         chunks.push(source.slice(stop,end), code);
         end = start;
     }
-    return { entries: [...entries.values()], code: edits.length ? "import { templateCopy as __listingCopy } from '/src/templateCopy';\n" + source.slice(0,end) + chunks.reverse().join('') : source };
+    return { entries: [...entries.values()], code: edits.length ? "import { templateCopy as __listingCopy, listingBlock as __listingBlock } from '/src/templateCopy';\n" + source.slice(0,end) + chunks.reverse().join('') : source };
 }
 
 export function templateCopyPlugin() {

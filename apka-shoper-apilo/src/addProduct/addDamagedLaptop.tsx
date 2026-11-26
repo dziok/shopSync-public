@@ -19,6 +19,7 @@ import { getShoperErrorMessage, shoperSaveProgress } from "../backendQueries/sho
 import { ApiloSubmitControls } from "./apiloSubmitControls";
 import { TemplateActionBar } from "./TemplateActionBar";
 import FormAssistant from "./FormAssistant";
+import { useHardwareAssessment } from "./useHardwareAssessment";
 
 type AddDamagedLaptopProps = {
     authToken: string,
@@ -160,7 +161,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                 translations: {
                     pl_PL: {
                         name: data.name,
-                        description: data.description,
+                        description: assessment.shoperDescription(data.description),
                         active: data.active
                     }
                 },
@@ -297,6 +298,9 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
     let screen = watch("screen", "");
     let battery = watch("battery", "");
     let bios = watch("bios", "");
+    const assessment = useHardwareAssessment('damaged-laptop', props.authToken, {
+        cpu, model, gpu, ram:ramAmount, ramType, disk, capacity:diskSize, screen, battery, bios, condition:visualCondition,
+    });
 
     let description = watch("description", damagedLaptopTemplate(
         model,
@@ -545,6 +549,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                             <TemplateActionBar onAddPhotos={() => images.imageInputRef.current?.click()}
                                 photoCount={images.selectedImages.length} onManagePhotos={() => images.setManagerOpen(true)}>
                                 <TemplateResetButton disabled={isSubmitting || images.uploadingImages} />
+                                {assessment.panel}
                                 <FormAssistant template="damaged-laptop" token={props.authToken} control={control}
                                     read={key => getValues(key as any)} knownFalse={key => getFieldState(key as any).isDirty}
                                     write={(key,value) => setValue(key as any, value, { shouldDirty: true, shouldValidate: true })} />
@@ -558,7 +563,7 @@ function AddDamagedLaptop(props: AddDamagedLaptopProps) {
                     </Box>
                 </form>
                 <div className="preview">
-                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: description }} />
+                    <div style={{ padding: '20px' }} dangerouslySetInnerHTML={{ __html: assessment.shoperDescription(description) }} />
                 </div>
             </div>
 

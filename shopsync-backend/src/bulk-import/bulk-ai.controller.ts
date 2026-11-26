@@ -24,4 +24,7 @@ export class BulkAiController {
 
     @Post('form')
     form(@Body() body: Record<string, unknown>) { return this.service.suggestForm(body); }
+
+    @Post('suitability')
+    suitability(@Body() body: Record<string, unknown>) { return this.service.suitability(body); }
 }
